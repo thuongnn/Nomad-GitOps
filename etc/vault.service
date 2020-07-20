@@ -1,0 +1,26 @@
+[Unit]
+Description=Vault by HashiCorp
+Documentation=https://vaultproject.io/docs/
+Wants=network-online.target consul.service
+After=network.target network-online.target consul.service
+
+[Service]
+EnvironmentFile=-/etc/default/vault
+ExecReload=/bin/kill -HUP $MAINPID
+ExecStart=/usr/sbin/vault server "-config=/etc/vault/server.hcl"
+Group=root
+KillMode=process
+KillSignal=SIGINT
+LimitNOFILE=65536
+LimitNPROC=infinity
+Restart=on-failure
+RestartSec=5
+StartLimitBurst=3
+StartLimitIntervalSec=10
+TasksMax=infinity
+Type=simple
+User=root
+WorkingDirectory=/
+
+[Install]
+WantedBy=multi-user.target

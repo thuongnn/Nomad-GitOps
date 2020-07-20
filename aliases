@@ -1,0 +1,183 @@
+#!/bin/bash
+
+
+# look for NOMAD_ADDR and NOMAD_TOKEN
+[ -e $HOME/.config/nomad ]  &&  source $HOME/.config/nomad
+
+
+# nomad/consul autocompletes
+which  nomad >/dev/null && [ "$SHELL"  = "/bin/zsh" ] && autoload -U +X bashcompinit && bashcompinit
+which  nomad >/dev/null && [ "$SHELL"  = "/bin/zsh" ] && complete -o nospace -C $(which  nomad)  nomad
+which consul >/dev/null && [ "$SHELL"  = "/bin/zsh" ] && complete -o nospace -C $(which consul) consul
+
+which  nomad >/dev/null && [ "$SHELL" != "/bin/zsh" ] && complete            -C $(which  nomad)  nomad
+which consul >/dev/null && [ "$SHELL" != "/bin/zsh" ] && complete            -C $(which consul) consul
+
+
+
+function nom-app() {
+  # finds the webapp related to given job/CWD and opens it in browser
+  [ $# -eq 1 ]  &&  JOB=$1
+  [ $# -ne 1 ]  &&  JOB=$(nom-job-from-cwd)
+
+  _nom-url
+
+  [ "$URL" = "" ]  &&  echo "URL not found - is service running? try:\n nomad status $JOB"  &&  return
+  open "$URL"
+}
+
+
+function nom-ssh() {
+  # simple way to pop in (ssh-like) to a given job
+  # Usage: [job name, eg: x-thumb]  -OR-  no args will use CWD to determine job
+  [ $# -ge 1 ]  &&   JOB=$1
+  [ $# -lt 1 ]  &&   JOB=$(nom-job-from-cwd)
+  [ $# -ge 2 ]  &&  TASK=$2    # for rarer TaskGroup case where 2+ Tasks spec-ed in sam Job
+  [ $# -lt 2 ]  &&  TASK=$JOB
+
+  if [ $# -ge 2 ]; then
+    shift
+    shift
+    nomad alloc exec -i -t -task $TASK $(nomad job status $JOB |egrep -m1 '\srun\s' |cut -f1 -d' ') \
+      "$@"
+  else
+    nomad alloc exec -i -t -task $TASK $(nomad job status $JOB |egrep -m1 '\srun\s' |cut -f1 -d' ') \
+      sh -c '[ -e /bin/zsh ] && zsh  ||  [ -e /bin/bash ] && bash  ||  [ -e /bin/sh ] && sh'
+  fi
+}
+
+
+function nom-cp() {
+  # copies a laptop local file into running deploy (avoids full pipeline just to see changes)
+  local FILE=${1:?"Usage: [src file, locally qualified while 'cd'-ed inside a repo]"}
+  local JOB=$(nom-job-from-cwd)
+  local ALLOC=$(nom-job-to-alloc)
+  [ $# -ge 2 ]  &&  TASK=$2    # for rarer TaskGroup case where 2+ Tasks spec-ed in sam Job
+  [ $# -lt 2 ]  &&  TASK=$JOB
+
+  # now split the FILE name into two pieces -- 'the root of the git tree' and 'the rest'
+  local DIR=$(dirname "$FILE")
+  local TOP=$(git -C "$DIR" rev-parse --show-toplevel)
+  local REST=$(echo "$FILE" | perl -pe "s|^$TOP||; s|^/+||;")
+
+  set -x
+  cat "$FILE" | nomad alloc exec -i -task $TASK "$ALLOC" sh -c "cat >| '$REST'"
+  set +x
+}
+
+
+function nom-logs() {
+  # simple way to view logs for a given job
+  [ $# -eq 1 ]  &&  JOB=$1
+  [ $# -ne 1 ]  &&  JOB=$(nom-job-from-cwd)
+  nomad alloc logs -stderr -f $(nom-job-to-alloc $JOB)
+}
+
+
+function nom-status() {
+  # prints detailed status for a repo's service and deployment
+  [ $# -eq 1 ]  &&  JOB=$1
+  [ $# -ne 1 ]  &&  JOB=$(nom-job-from-cwd)
+
+  line
+  echo "nomad status $JOB"
+  line
+        nomad status $JOB
+  line
+  echo 'nomad alloc status -stats $(nom-job-to-alloc '$JOB')'
+  line
+        nomad alloc status -stats $(nom-job-to-alloc $JOB)
+  line
+}
+
+
+function nom-urls() {
+  # Lists all current urls for the services deployed to current nomad cluster (eg: webapps)
+  # Ideally, this is a faster single-shot call.  But to avoid requiring either `consul` addr
+  # and ACL token _in addition_ to `nomad` - we'll just use `nomad` directly instead.
+  #   consul catalog services -tags
+  for JOB in $(wget -qO- --header "X-Nomad-Token: ${NOMAD_TOKEN?}" ${NOMAD_ADDR?}/v1/jobs \
+    | jq -r '.[] | select(.Type=="service") | "\(.Name)"')
+  do
+    _nom-url
+    echo $URL
+  done |sort
+}
+
+
+function _nom-url() {
+  # logically private helper function
+  URL=$(wget -qO- --header "X-Nomad-Token: ${NOMAD_TOKEN?}" ${NOMAD_ADDR?}/v1/job/$JOB \
+    | jq -r '.TaskGroups[0].Tasks[0].Services[0].Tags' \
+    | fgrep :443 |tr -d '", ' |perl -pe 's/:443//; s=^urlprefix\-=https://='
+  )
+}
+
+
+function nom-restart() {
+  # restarts a job (NOTE: needs to already be up/responsive and ssh-able)
+  [ $# -eq 1 ]  &&  JOB=$1
+  [ $# -ne 1 ]  &&  JOB=$(nom-job-from-cwd)
+  nomad alloc stop $(nom-job-to-alloc $JOB)
+}
+
+
+function d() {
+  # show docker running containers and local images
+	[ "$#" = "0" ] && clear
+	sudo docker ps -a
+	line
+	sudo docker images
+}
+
+function nom() {
+  # quick way to get an overview of a nomad server when ssh-ed into it
+  d
+  line
+  nomad server members
+  line
+  nomad status
+  line
+}
+
+
+function nom-job-from-cwd() {
+  # parse out repo info, eg: 'ia' and 'petabox'
+  local GROUP_PROJECT=$(git config --get remote.origin.url |rev |cut -f1 -d: |rev |perl -pe 's/\.git//' |tr A-Z a-z |tr / -)
+  local PROJECT=$(git rev-parse --absolute-git-dir |egrep --color -o '.*?.git' |rev |cut -f2 -d/ |rev)
+  local BRANCH=$(git rev-parse --abbrev-ref HEAD)
+	local SLUG=$(echo "$BRANCH" |tr '/_.' '-' |tr A-Z a-z)
+  [ "$SLUG" = "master" ]  &&  echo $GROUP_PROJECT  &&  return
+  echo "${GROUP_PROJECT}-${SLUG}"
+}
+
+
+function nom-job-to-alloc() {
+  # prints alloc of a given job (when in high-availability and 2+ allocations, picks one at random)
+  # Usage: [job name, eg: x-thumb]  -OR-  no args will use CWD to determine job
+  [ $# -eq 1 ]  &&  JOB=$1
+  [ $# -ne 1 ]  &&  JOB=$(nom-job-from-cwd)
+  nomad job status $JOB |egrep -m1 '\srun\s' |cut -f1 -d' '
+}
+
+
+function line () {
+  # horizontal line break
+	perl -e 'print "_"x100; print "\n\n";'
+}
+
+
+function nom-tunnel() {
+  # Sets up an ssh tunnel in the background to be able to talk to nomad cluster's consul and fabio.
+  [ "$NOMAD_ADDR" = "" ]  &&  echo "Please set NOMAD_ADDR environment variable first"  &&  return
+  local HOST=$(echo "$NOMAD_ADDR" | sed 's/:4646\/*$//' |sed 's/^https*:\/\///')
+  ssh -fNA -L 8500:$HOST:8500 -L 9998:$HOST:9998 $HOST
+}
+
+
+function nom-tail() {
+  # tail -f the most recent nomad log (for admins ssh-ed into a nomad cluster VM)
+  SVR=nomad
+  [ $# -eq 1 ]  &&  SVR=consul
+  sudo tail -n1000 -f $(ls /var/log/${SVR}* |tail -1)
+}
