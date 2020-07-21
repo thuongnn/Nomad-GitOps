@@ -43,7 +43,7 @@ There are various options that can be used in conjunction with the `project.noma
 ```text
 NOMAD__CHECK_PROTOCOL
 NOMAD__CPU
-NOMAD__DEBUG
+NOMAD__HEALTH_TIMEOUT
 NOMAD__HOME_RO
 NOMAD__HOME_RW
 NOMAD__HOSTNAME
