@@ -74,7 +74,7 @@ job "[[.NOMAD__SLUG]]" {
           # give container (eg: having issues) custom time amount to stay up for debugging before
           # 1st health check (eg: "3600s" value would be 1hr)
           check_restart {
-            grace = "[[ if .NOMAD__HEALTH_TIMEOUT ]]"
+            grace = "[[.NOMAD__HEALTH_TIMEOUT]]"
           }
           [[ end ]]
         }
