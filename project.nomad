@@ -60,6 +60,14 @@ job "[[.NOMAD__SLUG]]" {
           "urlprefix-[[.NOMAD__HOSTNAME]]:443/",
           # automatically redirect any http traffic to https
           "urlprefix-[[.NOMAD__HOSTNAME]]:80/ redirect=308,https://[[.NOMAD__HOSTNAME]]/"
+          [[ if .NOMAD__HOSTNAME2 ]]
+            "urlprefix-[[.NOMAD__HOSTNAME2]]:443/",
+            "urlprefix-[[.NOMAD__HOSTNAME2]]:80/ redirect=308,https://[[.NOMAD__HOSTNAME2]]/"
+          [[ end ]]
+          [[ if .NOMAD__HOSTNAME3 ]]
+            "urlprefix-[[.NOMAD__HOSTNAME3]]:443/",
+            "urlprefix-[[.NOMAD__HOSTNAME3]]:80/ redirect=308,https://[[.NOMAD__HOSTNAME3]]/"
+          [[ end ]]
         ]
         port = "http"
         check {
