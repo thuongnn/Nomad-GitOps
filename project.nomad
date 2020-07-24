@@ -1,4 +1,4 @@
-
+# NOTE: for master branch: NOMAD__SLUG === CI_PROJECT_PATH_SLUG
 job "[[.NOMAD__SLUG]]" {
   datacenters = ["dc1"]
 
@@ -148,9 +148,9 @@ job "[[.NOMAD__SLUG]]" {
       #
       # Writes to '/secrets/file.env' inside container
       # Sets $NOMAP environment variable in containers (a JSON-encoded hashmap of your keys/vals)
-      vault { policies = [ "read-[[.NOMAD__SLUG]]" ] }
+      vault { policies = [ "read-[[.CI_PROJECT_PATH_SLUG]]" ] }
       template {
-        data = "NOMAP='{{with secret \"kv/data/[[.NOMAD__SLUG]]\"}}{{.Data.data | toJSON}}{{end}}'"
+        data = "NOMAP='{{with secret \"kv/data/[[.CI_PROJECT_PATH_SLUG]]\"}}{{.Data.data | toJSON}}{{end}}'"
         destination = "secrets/file.env"
         env         = true
       }
@@ -243,9 +243,9 @@ job "[[.NOMAD__SLUG]]" {
         }
       }
 
-      vault { policies = [ "read-[[.NOMAD__SLUG]]" ] }
+      vault { policies = [ "read-[[.CI_PROJECT_PATH_SLUG]]" ] }
       template {
-        data = "POSTGRESQL_PASSWORD={{with secret \"kv/data/[[.NOMAD__SLUG]]\"}}{{.Data.data.DB_PW | toJSON}}{{end}}"
+        data = "POSTGRESQL_PASSWORD={{with secret \"kv/data/[[.CI_PROJECT_PATH_SLUG]]\"}}{{.Data.data.DB_PW | toJSON}}{{end}}"
         destination = "secrets/file.env"
         env         = true
       }
@@ -268,7 +268,7 @@ job "[[.NOMAD__SLUG]]" {
           type     = "script"
           name     = "setup"
           command  = "/bin/sh"
-          args     = ["-c", "hostname -i |tee /alloc/data/[[.NOMAD__SLUG]]-db.ip"]
+          args     = ["-c", "hostname -i |tee /alloc/data/[[.CI_PROJECT_PATH_SLUG]]-db.ip"]
           interval = "1h"
           timeout  = "10s"
         }
@@ -313,11 +313,11 @@ job "[[.NOMAD__SLUG]]" {
         }
       }
 
-      vault { policies = [ "read-[[.NOMAD__SLUG]]" ] }
+      vault { policies = [ "read-[[.CI_PROJECT_PATH_SLUG]]" ] }
       template {
         data = <<EOH
-MARIADB_PASSWORD={{with secret "kv/data/[[.NOMAD__SLUG]]"}}{{.Data.data.DB_PW | toJSON}}{{end}}
-WORDPRESS_DATABASE_PASSWORD={{with secret "kv/data/[[.NOMAD__SLUG]]"}}{{.Data.data.DB_PW | toJSON}}{{end}}
+MARIADB_PASSWORD={{with secret "kv/data/[[.CI_PROJECT_PATH_SLUG]]"}}{{.Data.data.DB_PW | toJSON}}{{end}}
+WORDPRESS_DATABASE_PASSWORD={{with secret "kv/data/[[.CI_PROJECT_PATH_SLUG]]"}}{{.Data.data.DB_PW | toJSON}}{{end}}
 EOH
         destination = "secrets/file.env"
         env         = true
@@ -347,7 +347,7 @@ EOH
           type     = "script"
           name     = "setup"
           command  = "/bin/sh"
-          args     = ["-c", "hostname -i |tee /alloc/data/[[.NOMAD__SLUG]]-db.ip"]
+          args     = ["-c", "hostname -i |tee /alloc/data/[[.CI_PROJECT_PATH_SLUG]]-db.ip"]
           interval = "1h"
           timeout  = "10s"
         }
