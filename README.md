@@ -119,9 +119,6 @@ variables:
 - https://github.com/timperrett/hashpi (🍓raspberry PI mini cluster 😊)
 
 ## issues / next steps
-- IA repos needing PVs:  dweb  dweb-ipfs  pod  /  dwebcamp1  sentry
-- (fabio) open requests for 10m?
-  ( see [wt and rt here](https://github.com/fabiolb/fabio/blob/master/fabio.properties) )
 - have [deploy] wait for service to be up and marked healthy??
 - ACME / `certmanager` for let's encrypt / https, etc.
   - basic https works now if the certs are managed independently (and passed into fabio)
