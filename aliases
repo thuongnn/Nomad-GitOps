@@ -5,14 +5,16 @@
 [ -e $HOME/.config/nomad ]  &&  source $HOME/.config/nomad
 
 
-# nomad/consul autocompletes
-which  nomad >/dev/null && [ "$SHELL"  = "/bin/zsh" ] && autoload -U +X bashcompinit && bashcompinit
-which  nomad >/dev/null && [ "$SHELL"  = "/bin/zsh" ] && complete -o nospace -C $(which  nomad)  nomad
-which consul >/dev/null && [ "$SHELL"  = "/bin/zsh" ] && complete -o nospace -C $(which consul) consul
+# If not running interactively, don't setup autocomplete
+if [ ! -z "$PS1" ]; then
+  # nomad/consul autocompletes
+  which  nomad >/dev/null && [ "$SHELL"  = "/bin/zsh" ] && autoload -U +X bashcompinit && bashcompinit
+  which  nomad >/dev/null && [ "$SHELL"  = "/bin/zsh" ] && complete -o nospace -C $(which  nomad)  nomad
+  which consul >/dev/null && [ "$SHELL"  = "/bin/zsh" ] && complete -o nospace -C $(which consul) consul
 
-which  nomad >/dev/null && [ "$SHELL" != "/bin/zsh" ] && complete            -C $(which  nomad)  nomad
-which consul >/dev/null && [ "$SHELL" != "/bin/zsh" ] && complete            -C $(which consul) consul
-
+  which  nomad >/dev/null && [ "$SHELL" != "/bin/zsh" ] && complete            -C $(which  nomad)  nomad
+  which consul >/dev/null && [ "$SHELL" != "/bin/zsh" ] && complete            -C $(which consul) consul
+fi
 
 
 function nom-app() {
@@ -49,20 +51,53 @@ function nom-ssh() {
 
 function nom-cp() {
   # copies a laptop local file into running deploy (avoids full pipeline just to see changes)
-  local FILE=${1:?"Usage: [src file, locally qualified while 'cd'-ed inside a repo]"}
-  local JOB=$(nom-job-from-cwd)
-  local ALLOC=$(nom-job-to-alloc)
-  [ $# -ge 2 ]  &&  TASK=$2    # for rarer TaskGroup case where 2+ Tasks spec-ed in sam Job
-  [ $# -lt 2 ]  &&  TASK=$JOB
+
+  # first, see if this is vscode sync-rsync
+  local VSCODE=
+  [ "$#" -ge 4 ]  &&  ( echo "$@" |fgrep -q .vscode )  &&  VSCODE=1
+
+  if [ $VSCODE ]; then
+    # fish out file name from what VSCode 'sync-rsync' package sends us -- should be 2nd to last arg
+    local FILE=$(echo "$@" |rev |tr -s ' ' |cut -f2 -d' ' |rev)
+    # switch dirs to make aliases work
+    local DIR=$(dirname "$FILE")
+    cd "$DIR"
+    local BRANCH=$(git rev-parse --abbrev-ref HEAD)
+    local JOB=$(nom-job-from-cwd)
+    local ALLOC=$(nom-job-to-alloc)
+    local TASK=$JOB
+    cd -
+
+  else
+    local FILE=${1:?"Usage: [src file, locally qualified while 'cd'-ed inside a repo]"}
+    local BRANCH=$(git rev-parse --abbrev-ref HEAD)
+    local JOB=$(nom-job-from-cwd)
+    local ALLOC=$(nom-job-to-alloc)
+    [ $# -ge 2 ]  &&  TASK=$2    # for rarer TaskGroup case where 2+ Tasks spec-ed in sam Job
+    [ $# -lt 2 ]  &&  TASK=$JOB
+  fi
 
   # now split the FILE name into two pieces -- 'the root of the git tree' and 'the rest'
   local DIR=$(dirname "$FILE")
   local TOP=$(git -C "$DIR" rev-parse --show-toplevel)
   local REST=$(echo "$FILE" | perl -pe "s|^$TOP||; s|^/+||;")
 
-  set -x
-  cat "$FILE" | nomad alloc exec -i -task $TASK "$ALLOC" sh -c "cat >| '$REST'"
-  set +x
+
+  for var in FILE DIR TOP REST BRANCH JOB ALLOC; do
+    echo $var="${(P)var}"
+  done
+  echo
+
+
+  [ "$BRANCH" = "master" ]  &&  [ $VSCODE ]  &&  ( rsync "$@"; exit 0 )
+  [ "$BRANCH" = "master" ]  &&  [ $VSCODE ]  &&  [ "$JOB" = "" ]  &&  ( rsync "$@"; exit 0 )
+
+  [ "$JOB" = "" ]  &&  (
+    echo 'has this branch run a full pipeline and deployed a Review App yet?'
+    exit 1 # no relevant job & alloc found - nothing to do
+  )
+
+  cat "$FILE" | ( set -x; nomad alloc exec -i -task $TASK "$ALLOC" sh -c "cat >| '$REST'" )
 }
 
 
@@ -147,8 +182,9 @@ function nom-job-from-cwd() {
   local PROJECT=$(git rev-parse --absolute-git-dir |egrep --color -o '.*?.git' |rev |cut -f2 -d/ |rev)
   local BRANCH=$(git rev-parse --abbrev-ref HEAD)
 	local SLUG=$(echo "$BRANCH" |tr '/_.' '-' |tr A-Z a-z)
-  [ "$SLUG" = "master" ]  &&  echo $GROUP_PROJECT  &&  return
-  echo "${GROUP_PROJECT}-${SLUG}"
+  local JOB=$GROUP_PROJECT
+  [ "$SLUG" = "master" ]  ||  JOB="${JOB}-${SLUG}"
+  echo $(echo "$JOB" |cut -b1-63)
 }
 
 
