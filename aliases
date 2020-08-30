@@ -89,8 +89,8 @@ function nom-cp() {
   echo
 
 
-  [ "$BRANCH" = "master" ]  &&  [ $VSCODE ]  &&  ( rsync "$@"; exit 0 )
-  [ "$BRANCH" = "master" ]  &&  [ $VSCODE ]  &&  [ "$JOB" = "" ]  &&  ( rsync "$@"; exit 0 )
+  [ "$BRANCH" = "master" ]  &&  [ $VSCODE ]  &&  rsync "$@"  &&  exit 0
+  [ "$BRANCH" = "master" ]  &&  [ $VSCODE ]  &&  [ "$JOB" = "" ]  &&  rsync "$@"  &&  exit 0
 
   [ "$JOB" = "" ]  &&  (
     echo 'has this branch run a full pipeline and deployed a Review App yet?'
