@@ -16,6 +16,10 @@ echo '
 # nomad main port
 proto tcp dport 4646 ACCEPT;
 
+# vault main port
+proto tcp dport 8200 ACCEPT;
+
+
 # loadbalancer main ports - open to world for http/s std. ports
 proto tcp dport 443 ACCEPT;
 proto tcp dport  80 ACCEPT;
@@ -52,14 +56,16 @@ saddr $CLUSTER proto udp dport 8301 ACCEPT;
 saddr $CLUSTER proto tcp dport 8302 ACCEPT;
 saddr $CLUSTER proto udp dport 8302 ACCEPT;
 
+# try to avoid "ACL Token not found" - https://github.com/hashicorp/consul/issues/5421
+saddr $CLUSTER proto tcp dport 8201 ACCEPT;
+saddr $CLUSTER proto udp dport 8400 ACCEPT;
+saddr $CLUSTER proto tcp dport 8500 ACCEPT;
+
 # for consul join
 saddr $CLUSTER proto tcp dport 8301 ACCEPT;
 
 # for fabio service discovery
 saddr $CLUSTER proto tcp dport 9998 ACCEPT;
-
-# vault main port
-saddr $CLUSTER proto tcp dport 8200 ACCEPT;
 
 
 # for webapps and such on higher ports

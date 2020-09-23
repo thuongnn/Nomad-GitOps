@@ -9,3 +9,5 @@ listener "tcp" {
   tls_cert_file = "/etc/fabio/ssl/VAULT_DOM-cert.pem"
   tls_key_file  = "/etc/fabio/ssl/VAULT_DOM-key.pem"
 }
+
+ui = true
