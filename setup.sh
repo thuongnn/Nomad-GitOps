@@ -46,6 +46,7 @@ FIRSTIP=$(host $FIRST |tail -1 |rev |cut -f1 -d' ' |rev)
 NOMAD_HOST=$FIRST.$TLS_DOMAIN
 VAULT_DOM=$TLS_DOMAIN
 VAULT_HOST=$FIRST.$VAULT_DOM
+MAX_PV=20
 
 # xxx should setup user/group `consul` like:
 # https://learn.hashicorp.com/consul/datacenter-deploy/deployment-guide#install-consul
@@ -152,7 +153,7 @@ function setup-node() {
   # Keeping things simple, and to avoid complex multi-host solutions like rook/ceph, we'll
   # pass through this `/pv` dir from the VM/host to containers.  Each container using it
   # needs to use unique subdirs...
-  for N in $(seq 1 20); do
+  for N in $(seq 1 $MAX_PV); do
     sudo mkdir -m777 -p /pv$N
   done
 
@@ -182,11 +183,11 @@ client {
   # enabling means _this_ server can schedule jobs - kind of like "tainting" your master in kubernetes
   enabled       = true
 '
-  # Let's put the loadbalancer on the first two node added to cluster.
+  # Let's put the loadbalancer on the first two nodes added to cluster.
   # All jobs requiring a PV get put on 2nd node in cluster (or first if cluster of 1).
   local KIND='worker'
-  [ $COUNT -le 0 ]  &&  KIND="$KIND,lb"
-  [ $COUNT -eq 1 ]  &&  KIND="$KIND,pv"
+  [ $COUNT -le 1 ]  &&  KIND="$KIND,lb"
+  [ $COUNT -eq 1  -o  $CLUSTER_SIZE -eq 0 ]  &&  KIND="$KIND,pv"
   echo '
   meta {
     "kind" = "'$KIND'"
@@ -205,7 +206,7 @@ client {
   }'
 
   # pass through disk from host for now.  peg project(s) with PV requirements to this host.
-  for N in $(seq 1 20); do
+  for N in $(seq 1 $MAX_PV); do
     echo -n '
   host_volume "pv'$N'" {
     path      = "/pv'$N'"
