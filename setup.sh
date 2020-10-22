@@ -1,15 +1,20 @@
 #!/bin/zsh -e
 
-# one time setup of server(s) to make a nomad cluster (presently single server simple setup)
+# One time setup of server(s) to make a nomad cluster.
+#
+# Assumes you are creating cluster with debian/ubuntu VMs/baremetals,
+# that you have ssh and sudo access to.
 
-[ $# -lt 5 ]  &&  echo "
-usage: $0  [TLS_DOMAIN]  [TLS_CRT file]  [TLS_KEY file]  [first node]  [cluster size]
 
-[TLS_DOMAIN]   - eg: x.archive.org
-[TLS_CRT file] - file location. PEM format.
-[TLS_CRT fle]  - file location. PEM format.  May need to prepend 'SERVER:' for use by rsync..)
-[first node]   - name of the first node in your cluster - we'll append [TLS_DOMAIN] to it.
-[cluster size] - number of nodes - 1 or more.
+[ $# -lt 1 ]  &&  echo "
+usage: $0  [TLS_CRT file]  [TLS_KEY file]  [cluster size]  # run on first node
+usage: $0  [first node FQDN]                               # run on each additional node
+
+[TLS_CRT file] - file location. wildcard domain PEM format.
+[TLS_KEY file] - file location. wildcard domain PEM format.  May need to prepend '[SERVER]:' for rsync..)
+[cluster size] - number of nodes - set if more than 1 node.
+
+[first node FQDN] - fully qualified name of the first node in your cluster
 
 Run this script on each node in your cluster, while ssh-ed in to them.
 (git clone this repo somewhere..)
@@ -22,15 +27,15 @@ fabio load balancer goes to so we can reuse TLS certs.  This will also setup ACL
 "  &&  exit 1
 set -x
 
-NOMAD_VERSION=0.11.3
-CONSUL_VERSION=1.7.3 # 1.8.0
-VAULT_VERSION=1.4.2 # 1.4.3
 
-TLS_DOMAIN=$1
-TLS_CRT=$2  # @see create-https-certs.sh - fully qualified path to crt file it created
-TLS_KEY=$3  # @see create-https-certs.sh - fully qualified path to key file it created
-FIRST=$4
-CLUSTER_SIZE=$5
+if [ $# -gt 1 ]; then
+  FIRST=$(hostname -f)
+  TLS_CRT=$1  # @see create-https-certs.sh - fully qualified path to crt file it created
+  TLS_KEY=$2  # @see create-https-certs.sh - fully qualified path to key file it created
+  CLUSTER_SIZE=${3:-1}
+else
+  FIRST=$1
+fi
 
 MYDIR=${0:a:h}
 NODE=$(hostname -s)
@@ -43,15 +48,13 @@ unset   VAULT_ADDR   VAULT_TOKEN
 
 FIRSTIP=$(host $FIRST |tail -1 |rev |cut -f1 -d' ' |rev)
 
-NOMAD_HOST=$FIRST.$TLS_DOMAIN
-VAULT_DOM=$TLS_DOMAIN
-VAULT_HOST=$FIRST.$VAULT_DOM
+NOMAD_HOST=$FIRST
+VAULT_HOST=$FIRST
+VAULT_DOM=$(echo $FIRST |cut -f2- -d.)
+VAULT_TLS_CRT=/etc/fabio/ssl/${VAULT_DOM?}-cert.pem
+VAULT_TLS_KEY=/etc/fabio/ssl/${VAULT_DOM?}-key.pem
 MAX_PV=20
 
-# xxx should setup user/group `consul` like:
-# https://learn.hashicorp.com/consul/datacenter-deploy/deployment-guide#install-consul
-
-# https://medium.com/velotio-perspectives/how-much-do-you-really-know-about-simplified-cloud-deployments-b74d33637e07
 
 cd /tmp
 
@@ -60,43 +63,39 @@ function setup-node() {
   # install docker if not already present
   $MYDIR/install-docker-ce.sh
 
-  # install minimal requirements
-  sudo apt-get -y install  unzip
-
-
-  ###################################################################################################
   # install binaries and service files
-  for PRODUCT in  consul  nomad  vault; do
-    PRODUCTUP=$(echo $PRODUCT |tr a-z A-Z) # uppercasify
-    VER=$(eval "echo \${${PRODUCTUP}_VERSION}") # get the version number (from top-level globals)
+  #   eg: /usr/bin/nomad  /etc/nomad.d/nomad.hcl  /usr/lib/systemd/system/nomad.service
+  curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
+  sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
+  sudo apt-get -yqq update
 
-    wget https://releases.hashicorp.com/$PRODUCT/$VER/${PRODUCT}_${VER}_linux_amd64.zip -qO $PRODUCT.zip
-    unzip -o $PRODUCT.zip
-    sudo chown root:root $PRODUCT
-    sudo mv -fv $PRODUCT /usr/sbin/
-    rm -fv $PRODUCT.zip
+  sudo apt-get -yqq install  nomad  vault  consul
 
-    # install /etc/ conf and system files
-    sudo cp $MYDIR/etc/$PRODUCT.service /etc/systemd/system/
-    sudo chown root:root                /etc/systemd/system/$PRODUCT.service
+  # find daemon config files
+  NOMAD_HCL=$( dpkg -L nomad  |egrep ^/etc/ |fgrep -m1 .hcl)
+  CONSUL_HCL=$(dpkg -L consul |egrep ^/etc/ |fgrep -m1 .hcl)
+  VAULT_HCL=$( dpkg -L vault  |egrep ^/etc/ |fgrep -m1 .hcl)
 
-    HCL=/etc/$PRODUCT/server.hcl
-    sudo mkdir -p $(dirname $HCL)
-    sudo cp $MYDIR/etc/$PRODUCT.hcl $HCL
-    sudo chmod 400       $HCL
-    sudo chown root.root $HCL
-  done
+  # restore original config (if reran)
+  [ -e  $NOMAD_HCL.orig ]  &&  sudo cp -p  $NOMAD_HCL.orig  $NOMAD_HCL
+  [ -e $CONSUL_HCL.orig ]  &&  sudo cp -p $CONSUL_HCL.orig $CONSUL_HCL
+  [ -e  $VAULT_HCL.orig ]  &&  sudo cp -p  $VAULT_HCL.orig  $VAULT_HCL
+
+
+  # stash copies of original config
+  sudo cp -p  $NOMAD_HCL  $NOMAD_HCL.orig
+  sudo cp -p $CONSUL_HCL $CONSUL_HCL.orig
+  sudo cp -p  $VAULT_HCL  $VAULT_HCL.orig
 
 
   ###################################################################################################
   # See if we are the first node in the cluster
-  HCL=/etc/nomad/server.hcl
   # See how many nodes in the cluster already (might be 0)
   # We will put LB on 1st server
   # We will put PV on 2nd server (or if single node cluster - 1st/only server)
   COUNT=666 # gets re/set below
-  N=$(ssh $FIRST "sudo fgrep -c '@@' $HCL |cat")
-  if [ $N -gt 0 ]; then
+  N=$(ssh $FIRST "fgrep -c 'encrypt =' $NOMAD_HCL |cat")
+  if [ $N -eq 0 ]; then
     # starting cluster - how exciting!  mint some tokens
     TOK_N=$(nomad operator keygen |tr -d ^)
     TOK_C=$(consul keygen |tr -d ^)
@@ -105,37 +104,44 @@ function setup-node() {
     nomad-env-vars
     # ^^ now we can talk to first nomad server
     COUNT=$(nomad node status -t '{{range .}}{{.Name}}{{"\n"}}{{end}}' |egrep . |wc -l |tr -d ' ')
-    TOK_N=$(ssh $FIRST "sudo egrep 'encrypt\s*=' /etc/nomad/server.hcl"  |cut -f2- -d= |tr -d '\t "')
-    TOK_C=$(ssh $FIRST "sudo egrep 'encrypt\s*=' /etc/consul/server.hcl" |cut -f2- -d= |tr -d '\t "')
+    TOK_N=$(ssh $FIRST "egrep 'encrypt\s*=' $NOMAD_HCL"  |cut -f2- -d= |tr -d '\t "')
+    TOK_C=$(ssh $FIRST "egrep 'encrypt\s*=' $CONSUL_HCL" |cut -f2- -d= |tr -d '\t "')
+    CLUSTER_SIZE=$(ssh $FIRST "egrep ^bootstrap_expect $CONSUL_HCL")
   fi
 
 
-  ## Consul - edit server.hcl and setup the fields 'encrypt' and 'retry_join' as per your cluster.
-  HCL=/etc/consul/server.hcl
-  sudo sed -i -e "s^@@CONSUL_KEY@@^$TOK_C^"       $HCL
-  sudo sed -i -e "s^@@NODE_NAME@@^$NODE^"         $HCL
-  sudo sed -i -e "s^@@SRV_IP_ADDRESS@@^$FIRSTIP^" $HCL
-  sudo sed -i -e "s^bootstrap_expect\s*=\s*\d^bootstrap_expect = $CLUSTER_SIZE^" $HCL
-  sudo fgrep '@@' $HCL  &&  exit 1
+  # xxx if have issues in the future, relook at `retry_join` back into $CONSUL_HCL $NOMAD_HCL
 
 
-  ## Nomad - edit server.hcl and setup the fields 'encrypt' and 'retry_join' as per your cluster.
-  HCL=/etc/nomad/server.hcl
-  sudo sed -i -e "s^@@NOMAD_KEY@@^$TOK_N^"        $HCL
-  sudo sed -i -e "s^@@NODE_NAME@@^$NODE^"         $HCL
-  sudo sed -i -e "s^@@SRV_IP_ADDRESS@@^$FIRSTIP^" $HCL
-  sudo sed -i -e "s^bootstrap_expect\s*=\s*\d^bootstrap_expect = $CLUSTER_SIZE^" $HCL
-  sudo fgrep '@@' $HCL  &&  exit 1
+  ## Consul - edit server.hcl and setup the fields 'encrypt' etc. as per your cluster.
+  sudo sed -i -e 's^#server .*^server = true^'                                 $CONSUL_HCL
+  sudo sed -i -e 's^#bootstrap_expect=.*$^bootstrap_expect = '$CLUSTER_SIZE'^' $CONSUL_HCL
+  echo 'encrypt = "'$TOK_C'"' |sudo tee -a                                     $CONSUL_HCL
+
+
+  ## Nomad - edit server.hcl and setup the fields 'encrypt' etc. as per your cluster.
+  sudo sed -i -e 's^bootstrap_expect = *$^bootstrap_expect = '$CLUSTER_SIZE'\n  encrypt = "'$TOK_N'"^' $NOMAD_HCL
+
+
+  ## Vault - switch `storage "file"` to `storage "consul"`
+  sudo perl -i -0pe 's/^storage "file".*?}//ms'   $VAULT_HCL
+  echo '
+    storage "consul" {
+      address = "127.0.0.1:8500"
+      path    = "vault/"
+  }' |sudo tee -a $VAULT_HCL
 
 
   setup-certs
+
+
 
   ${MYDIR?}/ports-unblock.sh
 
   sudo service docker restart
 
 
-  ( configure-nomad ) |sudo tee -a $HCL
+  ( configure-nomad ) | sudo tee -a $NOMAD_HCL
 
 
   # get services ready to go
@@ -178,16 +184,31 @@ function setup-node() {
 
 
 function configure-nomad() {
+  # ensure docker jobs can mount volumes
+  echo '
+plugin "docker" {
+  config {
+    volumes {
+      enabled = true
+    }
+  }
+}
+
+plugin "raw_exec" {
+  config {
+    enabled = true
+  }
+}'
+
   echo '
 client {
-  # enabling means _this_ server can schedule jobs - kind of like "tainting" your master in kubernetes
-  enabled       = true
 '
+
   # Let's put the loadbalancer on the first two nodes added to cluster.
   # All jobs requiring a PV get put on 2nd node in cluster (or first if cluster of 1).
   local KIND='worker'
   [ $COUNT -le 1 ]  &&  KIND="$KIND,lb"
-  [ $COUNT -eq 1  -o  $CLUSTER_SIZE -eq 0 ]  &&  KIND="$KIND,pv"
+  [ $COUNT -eq 1  -o  $CLUSTER_SIZE -eq 1 ]  &&  KIND="$KIND,pv"
   echo '
   meta {
     "kind" = "'$KIND'"
@@ -222,7 +243,6 @@ client {
 function setup-vault() {
   # https://learn.hashicorp.com/vault/getting-started/deploy
   # update vault config
-  sudo sed -i -e "s^VAULT_DOM^$VAULT_DOM^" /etc/vault/server.hcl
 
   if [ $COUNT -eq 0 ]; then
     # fire up vault and unseal it
@@ -273,18 +293,17 @@ You ** MUST ** now copy this somewhere VERY safe, ideally one Unseal Key to each
 
     unset VAULT_ADDR
   else
-    export VAULT_TOKEN=$(ssh $FIRST "sudo egrep 'token\s*=' /etc/nomad/server.hcl"  |cut -f2- -d= |tr -d '\t "')
+    export VAULT_TOKEN=$(ssh $FIRST "egrep 'token\s*=' /etc/nomad/server.hcl"  |cut -f2- -d= |tr -d '\t "')
   fi
 
 
   # configure vault section of nomad
-  HCL=/etc/nomad/server.hcl
   echo '
 vault {
   enabled    = true
   token      = "'${VAULT_TOKEN?}'"
-  cert_file  = "/etc/fabio/ssl/'$VAULT_DOM'-cert.pem"
-  key_file   = "/etc/fabio/ssl/'$VAULT_DOM'-key.pem"
+  cert_file  = "/opt/nomad/tls/tls.crt"
+  key_file   = "/opt/nomad/tls/tls.key"
 	address    = "https://'$VAULT_HOST':8200" // active.vault.service.consul:8200"
 }
 
@@ -294,9 +313,9 @@ acl {
 }
 tls {
   http = true
-  cert_file = "/etc/fabio/ssl/'$VAULT_DOM'-cert.pem"
-  key_file  = "/etc/fabio/ssl/'$VAULT_DOM'-key.pem"
-}' |sudo tee -a $HCL
+  cert_file = "/opt/nomad/tls/tls.crt"
+  key_file  = "/opt/nomad/tls/tls.key"
+}' |sudo tee -a $NOMAD_HCL
 }
 
 
@@ -329,10 +348,38 @@ function setup-certs() {
     cp ${MYDIR?}/etc/fabio.properties /etc/fabio/
   )"
 
-  sudo bash -c "(
-    rsync -Pav ${TLS_CRT?} /etc/fabio/ssl/${TLS_DOMAIN?}-cert.pem
-    rsync -Pav ${TLS_KEY?} /etc/fabio/ssl/${TLS_DOMAIN?}-key.pem
+  [ $COUNT -eq 0 ]  &&  sudo bash -c "(
+    rsync -Pav ${TLS_CRT?} ${VAULT_TLS_CRT?}
+    rsync -Pav ${TLS_KEY?} ${VAULT_TLS_KEY?}
   )"
+
+  [ $COUNT -gt 0 ]  &&  bash -c "(
+    ssh ${FIRST?} sudo cat ${VAULT_TLS_CRT?} |sudo tee ${VAULT_TLS_CRT} >/dev/null
+    ssh ${FIRST?} sudo cat ${VAULT_TLS_KEY?} |sudo tee ${VAULT_TLS_KEY} >/dev/null
+  )"
+
+  sudo chown root.root ${VAULT_TLS_CRT} ${VAULT_TLS_KEY}
+  sudo chmod 444 ${VAULT_TLS_CRT}
+  sudo chmod 400 ${VAULT_TLS_KEY}
+
+
+  # :( it setup self-signed key but for dns name `Vault` - which won't resolve w/o Consul Connect
+  # Replace it w/ a wildcard domain file pair; and make it avail to nomad as well
+  sudo ls -l /opt/vault/tls/tls.crt  /opt/vault/tls/tls.key
+
+  for NOVA in nomad vault; do
+    sudo mkdir -m 500 -p      /opt/$NOVA/tls
+    sudo cp $VAULT_TLS_CRT    /opt/$NOVA/tls/tls.crt
+    sudo cp $VAULT_TLS_KEY    /opt/$NOVA/tls/tls.key
+    sudo chown -R $NOVA.$NOVA /opt/$NOVA/tls
+    sudo chmod -R go-rwx      /opt/$NOVA/tls
+  done
+}
+
+
+function uninstall() {
+  sudo apt-get -yqq purge    nomad  vault  consul
+  sudo find /opt/{nomad,consul,vault} /etc/{nomad,consul,vault,fabio} -ls -delete || echo
 }
 
 
