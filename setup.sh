@@ -378,8 +378,16 @@ function setup-certs() {
 
 
 function uninstall() {
-  sudo apt-get -yqq purge    nomad  vault  consul
-  sudo find /opt/{nomad,consul,vault} /etc/{nomad,consul,vault,fabio} -ls -delete || echo
+  (
+    set +e
+    for i in  nomad  vault  consul  docker  docker-ce; do
+      sudo service $i stop
+      sudo apt-get -yqq purge $i
+      sudo systemctl daemon-reload
+
+      sudo find  /opt/$i  /etc/$i  /etc/$i.d  /var/lib/$i  -ls -delete
+    done
+  )
 }
 
 
