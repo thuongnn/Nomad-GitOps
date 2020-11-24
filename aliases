@@ -105,6 +105,14 @@ function nom-logs() {
   # simple way to view logs for a given job
   [ $# -eq 1 ]  &&  JOB=$1
   [ $# -ne 1 ]  &&  JOB=$(nom-job-from-cwd)
+  nomad alloc logs -f $(nom-job-to-alloc $JOB)
+}
+
+
+function nom-logs-err() {
+  # simple way to view logs for a given job
+  [ $# -eq 1 ]  &&  JOB=$1
+  [ $# -ne 1 ]  &&  JOB=$(nom-job-from-cwd)
   nomad alloc logs -stderr -f $(nom-job-to-alloc $JOB)
 }
 
