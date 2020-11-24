@@ -386,6 +386,8 @@ function uninstall() {
       sudo systemctl daemon-reload
 
       sudo find  /opt/$i  /etc/$i  /etc/$i.d  /var/lib/$i  -ls -delete
+
+      sudo killall $i
     done
   )
 }
