@@ -89,6 +89,12 @@ job "[[.NOMAD__SLUG]]" {
       }
 
 
+      [[ if .NOMAD__JOB_TASK ]]
+        # arbitrary config a .gitlab-ci.yml can specify
+        [.NOMAD__JOB_TASK]]
+      [[ end ]]
+
+
       [[ if .NOMAD__PORT2 ]]
       service {
         name = "[[.NOMAD__SLUG]]-[[.NOMAD__PORT2_NAME]]"
@@ -289,6 +295,12 @@ job "[[.NOMAD__SLUG]]" {
         read_only   = false
       }
     } # end task
+    [[ end ]]
+
+
+    [[ if .NOMAD__JOB_GROUP ]]
+      # arbitrary config a .gitlab-ci.yml can specify
+      [.NOMAD__JOB_GROUP]]
     [[ end ]]
 
 
