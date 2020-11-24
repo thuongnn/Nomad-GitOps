@@ -91,7 +91,7 @@ job "[[.NOMAD__SLUG]]" {
 
       [[ if .NOMAD__JOB_TASK ]]
         # arbitrary config a .gitlab-ci.yml can specify
-        [.NOMAD__JOB_TASK]]
+        [[.NOMAD__JOB_TASK]]
       [[ end ]]
 
 
@@ -300,7 +300,7 @@ job "[[.NOMAD__SLUG]]" {
 
     [[ if .NOMAD__JOB_GROUP ]]
       # arbitrary config a .gitlab-ci.yml can specify
-      [.NOMAD__JOB_GROUP]]
+      [[.NOMAD__JOB_GROUP]]
     [[ end ]]
 
 
