@@ -3,7 +3,6 @@ job "[[.NOMAD__SLUG]]" {
   datacenters = ["dc1"]
 
   group "[[.NOMAD__SLUG]]" {
-    count = 1
     update {
       max_parallel  = 1
       min_healthy_time  = "30s"
