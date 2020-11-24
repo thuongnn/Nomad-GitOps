@@ -4,6 +4,7 @@ job "[[.NOMAD__SLUG]]" {
 
   group "[[.NOMAD__SLUG]]" {
     update {
+      # https://learn.hashicorp.com/tutorials/nomad/job-rolling-update
       max_parallel  = 1
       min_healthy_time  = "30s"
       healthy_deadline  = "5m"
@@ -31,6 +32,11 @@ job "[[.NOMAD__SLUG]]" {
           username = "[[ or (.CI_R2_USER) .CI_REGISTRY_USER ]]"
           password = "[[ or (.CI_R2_PASS) .CI_REGISTRY_PASSWORD ]]"
         }
+
+        [[ if .NOMAD__JOB_TASK_CONFIG ]]
+          # arbitrary config a .gitlab-ci.yml can specify
+          [[.NOMAD__JOB_TASK_CONFIG]]
+        [[ end ]]
       }
 
       resources {
