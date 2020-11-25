@@ -24,6 +24,8 @@ function nom-app() {
 
   _nom-url
 
+  URL=$(echo "$URL" |head -1)
+
   [ "$URL" = "" ]  &&  echo "URL not found - is service running? try:\n nomad status $JOB"  &&  return
   open "$URL"
 }
