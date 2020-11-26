@@ -104,8 +104,8 @@ function setup-node() {
     nomad-env-vars
     # ^^ now we can talk to first nomad server
     COUNT=$(nomad node status -t '{{range .}}{{.Name}}{{"\n"}}{{end}}' |egrep . |wc -l |tr -d ' ')
-    TOK_N=$(ssh $FIRST "egrep 'encrypt\s*=' $NOMAD_HCL"  |cut -f2- -d= |tr -d '\t "')
-    TOK_C=$(ssh $FIRST "egrep 'encrypt\s*=' $CONSUL_HCL" |cut -f2- -d= |tr -d '\t "')
+    TOK_N=$(ssh $FIRST "egrep  'encrypt\s*=' $NOMAD_HCL"  |cut -f2- -d= |tr -d '\t "')
+    TOK_C=$(ssh $FIRST "egrep '^encrypt\s*=' $CONSUL_HCL" |cut -f2- -d= |tr -d '\t "')
     CLUSTER_SIZE=$(ssh $FIRST "egrep ^bootstrap_expect $CONSUL_HCL" |cut -f2- -d= |tr -d '\n\t "')
   fi
 
