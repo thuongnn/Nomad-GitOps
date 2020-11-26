@@ -72,9 +72,9 @@ function setup-node() {
   sudo apt-get -yqq install  nomad  vault  consul
 
   # find daemon config files
-  NOMAD_HCL=$( dpkg -L nomad  |egrep ^/etc/ |fgrep -m1 .hcl)
-  CONSUL_HCL=$(dpkg -L consul |egrep ^/etc/ |fgrep -m1 .hcl)
-  VAULT_HCL=$( dpkg -L vault  |egrep ^/etc/ |fgrep -m1 .hcl)
+  NOMAD_HCL=$( dpkg -L nomad  |egrep ^/etc/ |egrep -m1 '\.hcl$')
+  CONSUL_HCL=$(dpkg -L consul |egrep ^/etc/ |egrep -m1 '\.hcl$')
+  VAULT_HCL=$( dpkg -L vault  |egrep ^/etc/ |egrep -m1 '\.hcl$')
 
   # restore original config (if reran)
   [ -e  $NOMAD_HCL.orig ]  &&  sudo cp -p  $NOMAD_HCL.orig  $NOMAD_HCL
@@ -114,17 +114,20 @@ function setup-node() {
 
 
   ## Consul - edit server.hcl and setup the fields 'encrypt' etc. as per your cluster.
-  sudo sed -i -e 's^#server .*^server = true^'                                 $CONSUL_HCL
-  sudo sed -i -e 's^#bootstrap_expect=.*$^bootstrap_expect = '$CLUSTER_SIZE'^' $CONSUL_HCL
-  echo 'encrypt = "'$TOK_C'"' |sudo tee -a                                     $CONSUL_HCL
+  echo '
+server = true
+bootstrap_expect = '$CLUSTER_SIZE'
+encrypt = "'$TOK_C'"
+' | sudo tee -a  $CONSUL_HCL
 
 
   ## Nomad - edit server.hcl and setup the fields 'encrypt' etc. as per your cluster.
-  sudo sed -i -e 's^bootstrap_expect =.*$^bootstrap_expect = '$CLUSTER_SIZE'\n  encrypt = "'$TOK_N'"^' $NOMAD_HCL
+  sudo sed -i -e 's^bootstrap_expect =.*$^bootstrap_expect = '$CLUSTER_SIZE'^' $NOMAD_HCL
 
 
   ## Vault - switch `storage "file"` to `storage "consul"`
   sudo perl -i -0pe 's/^storage "file".*?}//ms'   $VAULT_HCL
+
   echo '
     storage "consul" {
       address = "127.0.0.1:8500"
@@ -184,6 +187,12 @@ function setup-node() {
 
 
 function configure-nomad() {
+  echo '
+server {
+  encrypt = "'$TOK_N'"
+}'
+
+
   # ensure docker jobs can mount volumes
   echo '
 plugin "docker" {
@@ -293,7 +302,7 @@ You ** MUST ** now copy this somewhere VERY safe, ideally one Unseal Key to each
 
     unset VAULT_ADDR
   else
-    export VAULT_TOKEN=$(ssh $FIRST "egrep 'token\s*=' /etc/nomad/server.hcl"  |cut -f2- -d= |tr -d '\t "')
+    export VAULT_TOKEN=$(ssh $FIRST "egrep 'token\s*=' $NOMAD_HCL"  |cut -f2- -d= |tr -d '\t "')
   fi
 
 
@@ -304,7 +313,7 @@ vault {
   token      = "'${VAULT_TOKEN?}'"
   cert_file  = "/opt/nomad/tls/tls.crt"
   key_file   = "/opt/nomad/tls/tls.key"
-	address    = "https://'$VAULT_HOST':8200" // active.vault.service.consul:8200"
+	address    = "https://'$VAULT_HOST':8200" # active.vault.service.consul:8200"
 }
 
 # @see https://learn.hashicorp.com/nomad/transport-security/enable-tls
