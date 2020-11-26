@@ -113,7 +113,7 @@ function setup-node() {
   # xxx if have issues in the future, relook at `retry_join` back into $CONSUL_HCL $NOMAD_HCL
 
 
-  ## Consul - edit server.hcl and setup the fields 'encrypt' etc. as per your cluster.
+  ## Consul - setup the fields 'encrypt' etc. as per your cluster.
   echo '
 server = true
 bootstrap_expect = '$CLUSTER_SIZE'
@@ -121,8 +121,10 @@ encrypt = "'$TOK_C'"
 ' | sudo tee -a  $CONSUL_HCL
 
 
-  ## Nomad - edit server.hcl and setup the fields 'encrypt' etc. as per your cluster.
+  ## Nomad - setup the fields 'encrypt' etc. as per your cluster.
   sudo sed -i -e 's^bootstrap_expect =.*$^bootstrap_expect = '$CLUSTER_SIZE'^' $NOMAD_HCL
+
+  ( configure-nomad ) | sudo tee -a $NOMAD_HCL
 
 
   ## Vault - switch `storage "file"` to `storage "consul"`
@@ -142,9 +144,6 @@ encrypt = "'$TOK_C'"
   ${MYDIR?}/ports-unblock.sh
 
   sudo service docker restart
-
-
-  ( configure-nomad ) | sudo tee -a $NOMAD_HCL
 
 
   # get services ready to go
