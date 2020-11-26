@@ -110,74 +110,18 @@ function setup-node() {
   fi
 
 
+  setup-certs
+  setup-misc
+
   # xxx if have issues in the future, relook at `retry_join` back into $CONSUL_HCL $NOMAD_HCL
 
+  # Get consul running first
+  setup-consul
 
-  ## Consul - setup the fields 'encrypt' etc. as per your cluster.
-  echo '
-server = true
-bootstrap_expect = '$CLUSTER_SIZE'
-encrypt = "'$TOK_C'"
-' | sudo tee -a  $CONSUL_HCL
-
-
-  ## Nomad - setup the fields 'encrypt' etc. as per your cluster.
-  sudo sed -i -e 's^bootstrap_expect =.*$^bootstrap_expect = '$CLUSTER_SIZE'^' $NOMAD_HCL
-
-  ( configure-nomad ) | sudo tee -a $NOMAD_HCL
-
-
-  ## Vault - switch `storage "file"` to `storage "consul"`
-  sudo perl -i -0pe 's/^storage "file".*?}//ms'   $VAULT_HCL
-
-  echo '
-    storage "consul" {
-      address = "127.0.0.1:8500"
-      path    = "vault/"
-  }' |sudo tee -a $VAULT_HCL
-
-
-  setup-certs
-
-
-
-  ${MYDIR?}/ports-unblock.sh
-
-  sudo service docker restart
-
-
-  # get services ready to go
-  sudo systemctl daemon-reload
-  sudo systemctl enable  consul nomad vault
-
-  # get consul running first ...
-  sudo systemctl restart consul  &&  sleep 10
-
-  # ... so we can setup and get running Vault and unseal it
+  # Once consul is up, we can setup and get running Vault and unseal it
   setup-vault
 
-
-  # One server in cluster gets marked for hosting repos with Persistent Volume requirements.
-  # Keeping things simple, and to avoid complex multi-host solutions like rook/ceph, we'll
-  # pass through this `/pv` dir from the VM/host to containers.  Each container using it
-  # needs to use unique subdirs...
-  for N in $(seq 1 $MAX_PV); do
-    sudo mkdir -m777 -p /pv$N
-  done
-
-
-  # This gets us DNS resolving on archive.org VMs, at the VM level (not inside containers)-8
-  # for hostnames like:
-  #   active.vault.service.consul
-  #   services-clusters.service.consul
-  [ -e /etc/dnsmasq.d/ ]  &&  (
-    echo "server=/consul/127.0.0.1#8600" |sudo tee /etc/dnsmasq.d/nomad
-    sudo service dnsmasq restart
-    sleep 2
-  )
-
-
-  sudo systemctl restart nomad  &&  sleep 10
+  setup-nomad
   nomad-env-vars
 
   consul members
@@ -185,10 +129,32 @@ encrypt = "'$TOK_C'"
 }
 
 
+function setup-consul() {
+ ## Consul - setup the fields 'encrypt' etc. as per your cluster.
+  echo '
+server = true
+bootstrap_expect = '${CLUSTER_SIZE?}'
+encrypt = "'${TOK_C?}'"
+' | sudo tee -a  $CONSUL_HCL
+
+  sudo systemctl restart consul  &&  sleep 10
+}
+
+
+function setup-nomad() {
+  ## Nomad - setup the fields 'encrypt' etc. as per your cluster.
+  sudo sed -i -e 's^bootstrap_expect =.*$^bootstrap_expect = '${CLUSTER_SIZE?}'^' $NOMAD_HCL
+
+  ( configure-nomad ) | sudo tee -a $NOMAD_HCL
+
+  sudo systemctl restart nomad  &&  sleep 10
+}
+
+
 function configure-nomad() {
   echo '
 server {
-  encrypt = "'$TOK_N'"
+  encrypt = "'${TOK_N?}'"
 }'
 
 
@@ -215,14 +181,14 @@ client {
   # Let's put the loadbalancer on the first two nodes added to cluster.
   # All jobs requiring a PV get put on 2nd node in cluster (or first if cluster of 1).
   local KIND='worker'
-  [ $COUNT -le 1 ]  &&  KIND="$KIND,lb"
-  [ $COUNT -eq 1  -o  $CLUSTER_SIZE = "1" ]  &&  KIND="$KIND,pv"
+  [ ${COUNT?} -le 1 ]  &&  KIND="$KIND,lb"
+  [ ${COUNT?} -eq 1  -o  ${CLUSTER_SIZE?} = "1" ]  &&  KIND="$KIND,pv"
   echo '
   meta {
     "kind" = "'$KIND'"
   }'
 
-  [ "$NFSHOME" = "" ]  ||  echo '
+  [ $NFSHOME ]  &&  echo '
 
   host_volume "home-ro" {
     path      = "/home"
@@ -235,7 +201,7 @@ client {
   }'
 
   # pass through disk from host for now.  peg project(s) with PV requirements to this host.
-  for N in $(seq 1 $MAX_PV); do
+  for N in $(seq 1 ${MAX_PV?}); do
     echo -n '
   host_volume "pv'$N'" {
     path      = "/pv'$N'"
@@ -245,19 +211,50 @@ client {
 
   echo '
 }'
+
+
+  # configure vault section of nomad
+  echo '
+vault {
+  enabled    = true
+  token      = "'${VAULT_TOKEN?}'"
+  cert_file  = "/opt/nomad/tls/tls.crt"
+  key_file   = "/opt/nomad/tls/tls.key"
+	address    = "https://'${VAULT_HOST?}':8200" # active.vault.service.consul:8200"
+}
+
+# @see https://learn.hashicorp.com/nomad/transport-security/enable-tls
+acl {
+  enabled = true
+}
+tls {
+  http = true
+  cert_file = "/opt/nomad/tls/tls.crt"
+  key_file  = "/opt/nomad/tls/tls.key"
+}'
 }
 
 
 function setup-vault() {
+  # switch `storage "file"` to `storage "consul"`
+  sudo perl -i -0pe 's/^storage "file".*?}//ms'   $VAULT_HCL
+
+  echo '
+    storage "consul" {
+      address = "127.0.0.1:8500"
+      path    = "vault/"
+  }' |sudo tee -a $VAULT_HCL
+
+
   # https://learn.hashicorp.com/vault/getting-started/deploy
   # update vault config
 
-  if [ $COUNT -eq 0 ]; then
+  if [ ${COUNT?} -eq 0 ]; then
     # fire up vault and unseal it
     sudo systemctl restart vault  &&  sleep 10
 
     local VFI=/var/lib/.vault
-    export VAULT_ADDR=https://$VAULT_HOST:8200
+    export VAULT_ADDR=https://${VAULT_HOST?}:8200
     vault operator init |sudo tee $VFI
     sudo chmod 400 $VFI
 
@@ -268,7 +265,7 @@ function setup-vault() {
     vault operator unseal $(sudo grep 'Unseal Key 2:' $VFI |cut -f2- -d: |tr -d ' ')
     vault operator unseal $(sudo grep 'Unseal Key 3:' $VFI |cut -f2- -d: |tr -d ' ')
     sleep 10
-    echo "$VAULT_TOKEN" | vault login -
+    echo "${VAULT_TOKEN?}" | vault login -
 
     echo '
 
@@ -301,35 +298,14 @@ You ** MUST ** now copy this somewhere VERY safe, ideally one Unseal Key to each
 
     unset VAULT_ADDR
   else
-    export VAULT_TOKEN=$(ssh $FIRST "egrep 'token\s*=' $NOMAD_HCL"  |cut -f2- -d= |tr -d '\t "')
+    export VAULT_TOKEN=$(ssh ${FIRST} "egrep 'token\s*=' $NOMAD_HCL"  |cut -f2- -d= |tr -d '\t "')
   fi
-
-
-  # configure vault section of nomad
-  echo '
-vault {
-  enabled    = true
-  token      = "'${VAULT_TOKEN?}'"
-  cert_file  = "/opt/nomad/tls/tls.crt"
-  key_file   = "/opt/nomad/tls/tls.key"
-	address    = "https://'$VAULT_HOST':8200" # active.vault.service.consul:8200"
-}
-
-# @see https://learn.hashicorp.com/nomad/transport-security/enable-tls
-acl {
-  enabled = true
-}
-tls {
-  http = true
-  cert_file = "/opt/nomad/tls/tls.crt"
-  key_file  = "/opt/nomad/tls/tls.key"
-}' |sudo tee -a $NOMAD_HCL
 }
 
 
 function nomad-env-vars() {
   CONF=$HOME/.config/nomad
-  if [ $COUNT -eq 0 ]; then
+  if [ ${COUNT?} -eq 0 ]; then
     # NOTE: if you can't listen on :443 and :80 (the ideal defaults), you'll need to change
     # the two fabio.* files in this dir, re-copy the fabio.properties file in place and manually
     # restart fabio..
@@ -345,6 +321,38 @@ export NOMAD_TOKEN="$(fgrep 'Secret ID' $NOMACL |cut -f2- -d= |tr -d ' ') |tee $
     chmod 400 $NOMACL $CONF
   fi
   source $CONF
+}
+
+
+function setup-misc() {
+  ${MYDIR?}/ports-unblock.sh
+
+  sudo service docker restart
+
+
+  # get services ready to go
+  sudo systemctl daemon-reload
+  sudo systemctl enable  consul nomad vault
+
+
+  # One server in cluster gets marked for hosting repos with Persistent Volume requirements.
+  # Keeping things simple, and to avoid complex multi-host solutions like rook/ceph, we'll
+  # pass through this `/pv` dir from the VM/host to containers.  Each container using it
+  # needs to use unique subdirs...
+  for N in $(seq 1 ${MAX_PV?}); do
+    sudo mkdir -m777 -p /pv$N
+  done
+
+
+  # This gets us DNS resolving on archive.org VMs, at the VM level (not inside containers)-8
+  # for hostnames like:
+  #   active.vault.service.consul
+  #   services-clusters.service.consul
+  [ -e /etc/dnsmasq.d/ ]  &&  (
+    echo "server=/consul/127.0.0.1#8600" |sudo tee /etc/dnsmasq.d/nomad
+    sudo service dnsmasq restart
+    sleep 2
+  )
 }
 
 
@@ -417,11 +425,13 @@ echo 'skipping .keyring resets'  ||  (
 # and try again manually
 # (All servers need the same contents)
 
-[ $COUNT -gt 0 ]  &&  nomad server join $FIRST
-[ $COUNT -gt 0 ]  &&  consul       join $FIRST
-
-[ $COUNT -eq 0 ]  &&  ${MYDIR?}/setup-runner.sh
+[ $COUNT -gt 0 ]  &&  nomad server join ${FIRST?}
+[ $COUNT -gt 0 ]  &&  consul       join ${FIRST?}
 
 consul members
 nomad server members
 nomad node status
+
+
+# you can CTL-C from this if dont want a GitLab runner in your cluster
+[ $COUNT -eq 0 ]  &&  ${MYDIR?}/setup-runner.sh
