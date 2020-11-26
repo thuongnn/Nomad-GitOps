@@ -32,7 +32,7 @@ if [ $# -gt 1 ]; then
   FIRST=$(hostname -f)
   TLS_CRT=$1  # @see create-https-certs.sh - fully qualified path to crt file it created
   TLS_KEY=$2  # @see create-https-certs.sh - fully qualified path to key file it created
-  CLUSTER_SIZE=${3:-1}
+  CLUSTER_SIZE=${3:-"1"}
 else
   FIRST=$1
 fi
@@ -106,7 +106,7 @@ function setup-node() {
     COUNT=$(nomad node status -t '{{range .}}{{.Name}}{{"\n"}}{{end}}' |egrep . |wc -l |tr -d ' ')
     TOK_N=$(ssh $FIRST "egrep 'encrypt\s*=' $NOMAD_HCL"  |cut -f2- -d= |tr -d '\t "')
     TOK_C=$(ssh $FIRST "egrep 'encrypt\s*=' $CONSUL_HCL" |cut -f2- -d= |tr -d '\t "')
-    CLUSTER_SIZE=$(ssh $FIRST "egrep ^bootstrap_expect $CONSUL_HCL")
+    CLUSTER_SIZE=$(ssh $FIRST "egrep ^bootstrap_expect $CONSUL_HCL" |cut -f2- -d= |tr -d '\n\t "')
   fi
 
 
@@ -120,7 +120,7 @@ function setup-node() {
 
 
   ## Nomad - edit server.hcl and setup the fields 'encrypt' etc. as per your cluster.
-  sudo sed -i -e 's^bootstrap_expect = *$^bootstrap_expect = '$CLUSTER_SIZE'\n  encrypt = "'$TOK_N'"^' $NOMAD_HCL
+  sudo sed -i -e 's^bootstrap_expect =.*$^bootstrap_expect = '$CLUSTER_SIZE'\n  encrypt = "'$TOK_N'"^' $NOMAD_HCL
 
 
   ## Vault - switch `storage "file"` to `storage "consul"`
@@ -208,7 +208,7 @@ client {
   # All jobs requiring a PV get put on 2nd node in cluster (or first if cluster of 1).
   local KIND='worker'
   [ $COUNT -le 1 ]  &&  KIND="$KIND,lb"
-  [ $COUNT -eq 1  -o  $CLUSTER_SIZE -eq 1 ]  &&  KIND="$KIND,pv"
+  [ $COUNT -eq 1  -o  $CLUSTER_SIZE = "1" ]  &&  KIND="$KIND,pv"
   echo '
   meta {
     "kind" = "'$KIND'"
