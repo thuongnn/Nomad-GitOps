@@ -38,28 +38,25 @@ else
 fi
 
 MYDIR=${0:a:h}
-NODE=$(hostname -s)
+
 
 # avoid any environment vars from CLI poisoning..
-unset   NOMAD_ADDR   NOMAD_TOKEN
-unset  CONSUL_ADDR  CONSUL_TOKEN
-unset   VAULT_ADDR   VAULT_TOKEN
+unset   NOMAD_TOKEN
+unset  CONSUL_TOKEN
+unset   VAULT_TOKEN
 
 
-FIRSTIP=$(host $FIRST |tail -1 |rev |cut -f1 -d' ' |rev)
-
-NOMAD_HOST=$FIRST
-VAULT_HOST=$FIRST
-VAULT_DOM=$(echo $FIRST |cut -f2- -d.)
-VAULT_TLS_CRT=/etc/fabio/ssl/${VAULT_DOM?}-cert.pem
-VAULT_TLS_KEY=/etc/fabio/ssl/${VAULT_DOM?}-key.pem
-MAX_PV=20
+export  VAULT_ADDR="https://${FIRST?}:8200"
+export  NOMAD_ADDR="https://${FIRST?}:4646"
+export CONSUL_ADDR="http://localhost:8500"
+export  FABIO_ADDR="http://localhost:9998"
+export MAX_PV=20
 
 
-cd /tmp
 
+function main() {
+  cd /tmp
 
-function setup-node() {
   # install docker if not already present
   $MYDIR/install-docker-ce.sh
 
@@ -126,6 +123,75 @@ function setup-node() {
 
   consul members
   nomad server members
+
+
+
+  [ $COUNT -eq 0 ]  &&  nomad run ${MYDIR?}/etc/fabio.hcl
+
+  # NOTE: if you see failures join-ing and messages like:
+  #   "No installed keys could decrypt the message"
+  # try either (depending on nomad or consul) inspecting all nodes' contents of file) and:
+  echo 'skipping .keyring resets'  ||  (
+    sudo rm /var/lib/nomad/server/serf.keyring; sudo service nomad  restart
+    sudo rm /var/lib/consul/serf/local.keyring; sudo service consul restart
+  )
+  # and try again manually
+  # (All servers need the same contents)
+
+  [ $COUNT -gt 0 ]  &&  nomad server join ${FIRST?}
+  [ $COUNT -gt 0 ]  &&  consul       join ${FIRST?}
+
+  consul members
+  nomad server members
+  nomad node status
+
+  [ $COUNT -eq 0 ]  &&  (
+    welcome
+
+    echo "Setup GitLab runner in your cluster?\n"
+    echo "[CTL-C] now to skip setting up a GitLab runner in your cluster or "
+    echo "[RETURN] to proceed:"
+    read cont
+
+    ${MYDIR?}/setup-runner.sh
+  )
+}
+
+
+function welcome() {
+    echo "
+
+💥 CONGRATULATIONS!  Your cluster is setup. 💥
+
+You can get started with the UI for nomad, consul, vault, and fabio here:
+
+Nomad  (deployment: managements & scheduling):
+( https://www.nomadproject.io )
+$NOMAD_ADDR
+( login with NOMAD_TOKEN from $HOME/.config/nomad - keep this safe!)
+
+Consul (networking: service discovery & health checks, service mesh, envoy, secrets storage):
+( https://www.consul.io )
+$CONSUL_ADDR
+
+Vault  (security: secrets r/w)
+( https://vaultproject.io )
+$VAULT_ADDR
+( login with $HOME/.vault-token - keep this safe!)
+
+Fabio  (routing: load balancing, ingress/edge router, https and http2 termination (to http)
+( https://fabiolb.net )
+$FABIO_ADDR
+
+
+
+For localhost urls above - see 'nom-tunnel' alias here:
+  https://gitlab.com/internetarchive/nomad/-/blob/master/aliases
+
+
+
+
+"
 }
 
 
@@ -220,7 +286,7 @@ vault {
   token      = "'${VAULT_TOKEN?}'"
   cert_file  = "/opt/nomad/tls/tls.crt"
   key_file   = "/opt/nomad/tls/tls.key"
-	address    = "https://'${VAULT_HOST?}':8200" # active.vault.service.consul:8200"
+	address    = "'${VAULT_ADDR?}'" # active.vault.service.consul:8200"
 }
 
 # @see https://learn.hashicorp.com/nomad/transport-security/enable-tls
@@ -232,6 +298,26 @@ tls {
   cert_file = "/opt/nomad/tls/tls.crt"
   key_file  = "/opt/nomad/tls/tls.key"
 }'
+}
+
+
+function nomad-env-vars() {
+  CONF=$HOME/.config/nomad
+  if [ ${COUNT?} -eq 0 ]; then
+    # NOTE: if you can't listen on :443 and :80 (the ideal defaults), you'll need to change
+    # the two fabio.* files in this dir, re-copy the fabio.properties file in place and manually
+    # restart fabio..
+    local NOMACL=$HOME/.config/nomad.$(echo ${FIRST?} |cut -f1 -d.)
+    mkdir -p $(dirname $NOMACL)
+    chmod 600 $NOMACL $CONF 2>/dev/null |cat
+    nomad acl bootstrap |tee $NOMACL
+    # NOTE: can run `nomad acl token self` post-facto if needed...
+    echo "
+export NOMAD_ADDR=$NOMAD_ADDR
+export NOMAD_TOKEN="$(fgrep 'Secret ID' $NOMACL |cut -f2- -d= |tr -d ' ') |tee $CONF
+    chmod 400 $NOMACL $CONF
+  fi
+  source $CONF
 }
 
 
@@ -249,25 +335,30 @@ function setup-vault() {
   # https://learn.hashicorp.com/vault/getting-started/deploy
   # update vault config
 
-  if [ ${COUNT?} -eq 0 ]; then
-    # fire up vault and unseal it
-    sudo systemctl restart vault  &&  sleep 10
+  if [ ${COUNT?} -gt 0 ]; then
+    export VAULT_TOKEN=$(ssh ${FIRST} "egrep 'token\s*=' $NOMAD_HCL"  |cut -f2- -d= |tr -d '\t "')
+    return
+  fi
 
-    local VFI=/var/lib/.vault
-    export VAULT_ADDR=https://${VAULT_HOST?}:8200
-    vault operator init |sudo tee $VFI
-    sudo chmod 400 $VFI
 
-    export VAULT_TOKEN=$(sudo grep 'Initial Root Token:' $VFI |cut -f2- -d: |tr -d ' ')
+  # fire up vault and unseal it
+  sudo systemctl restart vault  &&  sleep 10
 
-    set +x
-    vault operator unseal $(sudo grep 'Unseal Key 1:' $VFI |cut -f2- -d: |tr -d ' ')
-    vault operator unseal $(sudo grep 'Unseal Key 2:' $VFI |cut -f2- -d: |tr -d ' ')
-    vault operator unseal $(sudo grep 'Unseal Key 3:' $VFI |cut -f2- -d: |tr -d ' ')
-    sleep 10
-    echo "${VAULT_TOKEN?}" | vault login -
+  echo "Vault initializing with ${VAULT_ADDR?}"
+  local VFI=/var/lib/.vault
+  vault operator init |sudo tee $VFI
+  sudo chmod 400 $VFI
 
-    echo '
+  export VAULT_TOKEN=$(sudo grep 'Initial Root Token:' $VFI |cut -f2- -d: |tr -d ' ')
+
+  set +x
+  vault operator unseal $(sudo grep 'Unseal Key 1:' $VFI |cut -f2- -d: |tr -d ' ')
+  vault operator unseal $(sudo grep 'Unseal Key 2:' $VFI |cut -f2- -d: |tr -d ' ')
+  vault operator unseal $(sudo grep 'Unseal Key 3:' $VFI |cut -f2- -d: |tr -d ' ')
+  sleep 10
+  echo "${VAULT_TOKEN?}" | vault login -
+
+  echo '
 
 
 💥 CONGRATULATIONS!  Your vault is setup and unsealed. 💥
@@ -276,51 +367,24 @@ function setup-vault() {
 You ** MUST ** now copy this somewhere VERY safe, ideally one Unseal Key to each of trusted people.
 
 
-    '
-    sudo egrep . $VFI
-    sudo rm -fv  $VFI
-    echo '
+  '
+  sudo egrep . $VFI
+  sudo rm -fv  $VFI
+  echo '
 
 
 
 💥 TYPE yes ONCE COPIED CONTENTS ABOVE TO CONTINUE (or CTL-C to abort):
-    '
-    cont=
-    while [ "$cont" != "yes" ]; do
-      read cont
-    done
+  '
+  cont=
+  while [ "$cont" != "yes" ]; do
+    read cont
+  done
 
-    set -x
+  set -x
 
-    vault secrets enable -version=2 kv
-    vault secrets list -detailed
-
-
-    unset VAULT_ADDR
-  else
-    export VAULT_TOKEN=$(ssh ${FIRST} "egrep 'token\s*=' $NOMAD_HCL"  |cut -f2- -d= |tr -d '\t "')
-  fi
-}
-
-
-function nomad-env-vars() {
-  CONF=$HOME/.config/nomad
-  if [ ${COUNT?} -eq 0 ]; then
-    # NOTE: if you can't listen on :443 and :80 (the ideal defaults), you'll need to change
-    # the two fabio.* files in this dir, re-copy the fabio.properties file in place and manually
-    # restart fabio..
-    local NOMACL=$HOME/.config/nomad.${NODE?}
-    mkdir -p $(dirname $NOMACL)
-    chmod 600 $NOMACL $CONF 2>/dev/null |cat
-    export NOMAD_ADDR="https://${NOMAD_HOST?}:4646"
-    nomad acl bootstrap |tee $NOMACL
-    # NOTE: can run `nomad acl token self` post-facto if needed...
-    echo "
-export NOMAD_ADDR=$NOMAD_ADDR
-export NOMAD_TOKEN="$(fgrep 'Secret ID' $NOMACL |cut -f2- -d= |tr -d ' ') |tee $CONF
-    chmod 400 $NOMACL $CONF
-  fi
-  source $CONF
+  vault secrets enable -version=2 kv
+  vault secrets list -detailed
 }
 
 
@@ -330,7 +394,7 @@ function setup-misc() {
   sudo service docker restart
 
 
-  # get services ready to go
+  # get services ready to go - xxxxxx needed?
   sudo systemctl daemon-reload
   sudo systemctl enable  consul nomad vault
 
@@ -358,6 +422,10 @@ function setup-misc() {
 
 function setup-certs() {
   # sets up https / TLS  and fabio for routing, loadbalancing, and https traffic
+  VAULT_DOM=$(echo $FIRST |cut -f2- -d.)
+  VAULT_TLS_CRT=/etc/fabio/ssl/${VAULT_DOM?}-cert.pem
+  VAULT_TLS_KEY=/etc/fabio/ssl/${VAULT_DOM?}-key.pem
+
   sudo bash -c "(
     mkdir -p /etc/fabio/ssl/
     chown root:root /etc/fabio/ssl/
@@ -409,29 +477,4 @@ function uninstall() {
 }
 
 
-setup-node
-
-
-
-[ $COUNT -eq 0 ]  &&  nomad run ${MYDIR?}/etc/fabio.hcl
-
-# NOTE: if you see failures join-ing and messages like:
-#   "No installed keys could decrypt the message"
-# try either (depending on nomad or consul) inspecting all nodes' contents of file) and:
-echo 'skipping .keyring resets'  ||  (
-  sudo rm /var/lib/nomad/server/serf.keyring; sudo service nomad  restart
-  sudo rm /var/lib/consul/serf/local.keyring; sudo service consul restart
-)
-# and try again manually
-# (All servers need the same contents)
-
-[ $COUNT -gt 0 ]  &&  nomad server join ${FIRST?}
-[ $COUNT -gt 0 ]  &&  consul       join ${FIRST?}
-
-consul members
-nomad server members
-nomad node status
-
-
-# you can CTL-C from this if dont want a GitLab runner in your cluster
-[ $COUNT -eq 0 ]  &&  ${MYDIR?}/setup-runner.sh
+main
