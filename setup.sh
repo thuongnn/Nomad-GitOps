@@ -121,8 +121,11 @@ function main() {
   setup-nomad
   nomad-env-vars
 
+  echo "================================================================================"
   consul members
+  echo "================================================================================"
   nomad server members
+  echo "================================================================================"
 
 
 
@@ -141,9 +144,16 @@ function main() {
   [ $COUNT -gt 0 ]  &&  nomad server join ${FIRST?}
   [ $COUNT -gt 0 ]  &&  consul       join ${FIRST?}
 
-  consul members
-  nomad server members
-  nomad node status
+  set +x
+
+  echo "================================================================================"
+  ( set -x; consul members )
+  echo "================================================================================"
+  ( set -x; nomad server members )
+  echo "================================================================================"
+  ( set -x; nomad node status )
+  echo "================================================================================"
+
 
   [ $COUNT -eq 0 ]  &&  (
     welcome
@@ -159,7 +169,7 @@ function main() {
 
 
 function welcome() {
-    echo "
+  echo "
 
 💥 CONGRATULATIONS!  Your cluster is setup. 💥
 
