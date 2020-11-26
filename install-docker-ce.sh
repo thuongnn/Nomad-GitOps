@@ -5,8 +5,8 @@
 VER="=18.06.1~ce~3-0~ubuntu"
 VER=
 
-sudo apt-get -y update
-sudo apt-get -y install \
+sudo apt-get -yqq update
+sudo apt-get -yqq install \
   apt-transport-https \
   ca-certificates \
   curl \
@@ -20,6 +20,6 @@ echo \
   $(lsb_release -cs) \
   stable" | sudo tee /etc/apt/sources.list.d/download_docker_com_linux_ubuntu.list
 
-sudo apt-get -y update
+sudo apt-get -yqq update
 
-sudo apt-get -y install docker-ce$VER
+sudo apt-get -yqq install docker-ce$VER
