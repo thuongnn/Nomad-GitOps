@@ -17,41 +17,19 @@ done
 umount $(df -h |fgrep /var/lib/nomad |rev |cut -f1 -d' ' |rev)  ||  echo 'seems like all unmounted'
 
 
-set +e
-service consul stop
-service  vault stop
-service  nomad stop
-service docker stop
+(
+  set +e
+  for i in  nomad  vault  consul  docker  fabio  docker-ce; do
+    service $i stop
+    apt-get -yqq purge $i
+    systemctl daemon-reload
 
-systemctl disable  consul nomad vault
+    find  /opt/$i  /etc/$i  /etc/$i.d  /var/lib/$i  -ls -delete
 
+    killall $i
+  done
 
-for i in /etc/fabio \
-  /etc/nomad \
-  /etc/consul \
-  /etc/nomad \
-  /etc/systemd/system/nomad.service \
-  /etc/systemd/system/consul.service \
-  /etc/systemd/system/vault.service \
-  /var/lib/nomad \
-  /var/lib/consul \
-  /var/lib/docker \
-  /etc/ferm/input/nomad.conf \
-  /etc/ferm/output/nomad.conf \
-  /etc/ferm/forward/nomad.conf \
-  /etc/dnsmasq.d/nomad \
-  /usr/sbin/consul \
-  /usr/sbin/nomad \
-  /usr/sbin/vault \
-  $(ls /var/log/nomad*.log) \
-  $(ls /var/log/consul*.log)
-do
-  find $i -ls -delete
-done
-set -e
+  rm -fv /etc/ferm/*/nomad.conf /etc/dnsmasq.d/nomad
 
-systemctl daemon-reload
-
-service ferm reload
-
-service docker start
+  service ferm reload
+)

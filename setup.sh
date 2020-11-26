@@ -198,6 +198,8 @@ $FABIO_ADDR
 For localhost urls above - see 'nom-tunnel' alias here:
   https://gitlab.com/internetarchive/nomad/-/blob/master/aliases
 
+To uninstall:
+  https://gitlab.com/internetarchive/nomad/-/blob/master/wipe-node.sh
 
 
 
@@ -296,7 +298,7 @@ vault {
   token      = "'${VAULT_TOKEN?}'"
   cert_file  = "/opt/nomad/tls/tls.crt"
   key_file   = "/opt/nomad/tls/tls.key"
-	address    = "'${VAULT_ADDR?}'" # active.vault.service.consul:8200"
+  address    = "'${VAULT_ADDR?}'" # active.vault.service.consul:8200"
 }
 
 # @see https://learn.hashicorp.com/nomad/transport-security/enable-tls
@@ -468,22 +470,6 @@ function setup-certs() {
     sudo chown -R $NOVA.$NOVA /opt/$NOVA/tls
     sudo chmod -R go-rwx      /opt/$NOVA/tls
   done
-}
-
-
-function uninstall() {
-  (
-    set +e
-    for i in  nomad  vault  consul  docker  docker-ce; do
-      sudo service $i stop
-      sudo apt-get -yqq purge $i
-      sudo systemctl daemon-reload
-
-      sudo find  /opt/$i  /etc/$i  /etc/$i.d  /var/lib/$i  -ls -delete
-
-      sudo killall $i
-    done
-  )
 }
 
 
