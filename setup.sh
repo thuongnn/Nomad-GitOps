@@ -257,10 +257,10 @@ client {
 '
 
   # Let's put the loadbalancer on the first two nodes added to cluster.
-  # All jobs requiring a PV get put on 2nd node in cluster (or first if cluster of 1).
+  # All jobs requiring a PV get put on first node in cluster.
   local KIND='worker'
   [ ${COUNT?} -le 1 ]  &&  KIND="$KIND,lb"
-  [ ${COUNT?} -eq 1  -o  ${CLUSTER_SIZE?} = "1" ]  &&  KIND="$KIND,pv"
+  [ ${COUNT?} -eq 0 ]  &&  KIND="$KIND,pv"
   echo '
   meta {
     "kind" = "'$KIND'"
