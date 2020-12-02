@@ -118,6 +118,7 @@ variables:
 - https://medium.com/@trevor00/building-container-platforms-part-one-introduction-4ee2338eb11
 
 ### future considerations?
+- https://learn.hashicorp.com/tutorials/vault/autounseal-transit?in=vault/auto-unseal
 - https://github.com/hashicorp/consul-esm  (external service monitoring for Consul)
 - https://github.com/timperrett/hashpi (🍓raspberry PI mini cluster 😊)
 
@@ -129,6 +130,9 @@ variables:
 
 ## setup cluster
 - [setup.sh](setup.sh)
+- you can customize the install with these environment variables:
+  - `NFSHOME=1` - setup some minor config to support a r/w `/home/` and r/o `/home/`
+  - `VAULT=` - set like this to skip vault (if you don't have secrets, etc.)
 
 
 ## archive.org minimum requirements for CI/CD:

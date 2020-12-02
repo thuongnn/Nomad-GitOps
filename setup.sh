@@ -21,6 +21,8 @@ Run this script on each node in your cluster, while ssh-ed in to them.
 
 If invoking cmd-line has env var NFSHOME=1 then we'll setup /home/ r/o and r/w mounts.
 
+Invoking with env var VAULT= will _skip_ setting up a vault service.
+
 To simplify, we'll setup and unseal your vault server on the same/first server that the
 fabio load balancer goes to so we can reuse TLS certs.  This will also setup ACL and TLS for nomad.
 
@@ -53,6 +55,9 @@ export  FABIO_ADDR="http://localhost:9998"
 export MAX_PV=20
 
 
+# are we installing vault (the default) or not?
+[ -z ${VAULT+notset} ] && VAULT=vault
+
 
 function main() {
   cd /tmp
@@ -66,23 +71,23 @@ function main() {
   sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
   sudo apt-get -yqq update
 
-  sudo apt-get -yqq install  nomad  vault  consul
+  sudo apt-get -yqq install  nomad  consul $VAULT
 
   # find daemon config files
-  NOMAD_HCL=$( dpkg -L nomad  |egrep ^/etc/ |egrep -m1 '\.hcl$')
-  CONSUL_HCL=$(dpkg -L consul |egrep ^/etc/ |egrep -m1 '\.hcl$')
-  VAULT_HCL=$( dpkg -L vault  |egrep ^/etc/ |egrep -m1 '\.hcl$')
+                  NOMAD_HCL=$( dpkg -L nomad  |egrep ^/etc/ |egrep -m1 '\.hcl$')
+                  CONSUL_HCL=$(dpkg -L consul |egrep ^/etc/ |egrep -m1 '\.hcl$')
+  [ $VAULT ]  &&  VAULT_HCL=$( dpkg -L vault  |egrep ^/etc/ |egrep -m1 '\.hcl$')
 
   # restore original config (if reran)
-  [ -e  $NOMAD_HCL.orig ]  &&  sudo cp -p  $NOMAD_HCL.orig  $NOMAD_HCL
-  [ -e $CONSUL_HCL.orig ]  &&  sudo cp -p $CONSUL_HCL.orig $CONSUL_HCL
-  [ -e  $VAULT_HCL.orig ]  &&  sudo cp -p  $VAULT_HCL.orig  $VAULT_HCL
+                  [ -e  $NOMAD_HCL.orig ]  &&  sudo cp -p  $NOMAD_HCL.orig  $NOMAD_HCL
+                  [ -e $CONSUL_HCL.orig ]  &&  sudo cp -p $CONSUL_HCL.orig $CONSUL_HCL
+  [ $VAULT ]  &&  [ -e  $VAULT_HCL.orig ]  &&  sudo cp -p  $VAULT_HCL.orig  $VAULT_HCL
 
 
   # stash copies of original config
-  sudo cp -p  $NOMAD_HCL  $NOMAD_HCL.orig
-  sudo cp -p $CONSUL_HCL $CONSUL_HCL.orig
-  sudo cp -p  $VAULT_HCL  $VAULT_HCL.orig
+                  sudo cp -p  $NOMAD_HCL  $NOMAD_HCL.orig
+                  sudo cp -p $CONSUL_HCL $CONSUL_HCL.orig
+  [ $VAULT ]  &&  sudo cp -p  $VAULT_HCL  $VAULT_HCL.orig
 
 
   ###################################################################################################
@@ -116,7 +121,7 @@ function main() {
   setup-consul
 
   # Once consul is up, we can setup and get running Vault and unseal it
-  setup-vault
+  [ $VAULT ]  &&  setup-vault
 
   setup-nomad
   nomad-env-vars
@@ -173,7 +178,7 @@ function welcome() {
 
 💥 CONGRATULATIONS!  Your cluster is setup. 💥
 
-You can get started with the UI for nomad, consul, vault, and fabio here:
+You can get started with the UI for: nomad consul $VAULT fabio here:
 
 Nomad  (deployment: managements & scheduling):
 ( https://www.nomadproject.io )
@@ -183,11 +188,16 @@ $NOMAD_ADDR
 Consul (networking: service discovery & health checks, service mesh, envoy, secrets storage):
 ( https://www.consul.io )
 $CONSUL_ADDR
+"
 
+  [ $VAULT ]  &&  echo "
 Vault  (security: secrets r/w)
 ( https://vaultproject.io )
 $VAULT_ADDR
 ( login with $HOME/.vault-token - keep this safe!)
+"
+
+  echo "
 
 Fabio  (routing: load balancing, ingress/edge router, https and http2 termination (to http)
 ( https://fabiolb.net )
@@ -292,7 +302,7 @@ client {
 
 
   # configure vault section of nomad
-  echo '
+  [ $VAULT ]  &&  echo '
 vault {
   enabled    = true
   token      = "'${VAULT_TOKEN?}'"
@@ -408,7 +418,7 @@ function setup-misc() {
 
   # get services ready to go - xxxxxx needed?
   sudo systemctl daemon-reload
-  sudo systemctl enable  consul nomad vault
+  sudo systemctl enable  consul nomad $VAULT
 
 
   # One server in cluster gets marked for hosting repos with Persistent Volume requirements.
@@ -434,9 +444,9 @@ function setup-misc() {
 
 function setup-certs() {
   # sets up https / TLS  and fabio for routing, loadbalancing, and https traffic
-  VAULT_DOM=$(echo $FIRST |cut -f2- -d.)
-  VAULT_TLS_CRT=/etc/fabio/ssl/${VAULT_DOM?}-cert.pem
-  VAULT_TLS_KEY=/etc/fabio/ssl/${VAULT_DOM?}-key.pem
+  local DOMAIN=$(echo $FIRST |cut -f2- -d.)
+  local CRT=/etc/fabio/ssl/${DOMAIN?}-cert.pem
+  local KEY=/etc/fabio/ssl/${DOMAIN?}-key.pem
 
   sudo bash -c "(
     mkdir -p /etc/fabio/ssl/
@@ -445,28 +455,28 @@ function setup-certs() {
   )"
 
   [ $COUNT -eq 0 ]  &&  sudo bash -c "(
-    rsync -Pav ${TLS_CRT?} ${VAULT_TLS_CRT?}
-    rsync -Pav ${TLS_KEY?} ${VAULT_TLS_KEY?}
+    rsync -Pav ${TLS_CRT?} ${CRT?}
+    rsync -Pav ${TLS_KEY?} ${KEY?}
   )"
 
   [ $COUNT -gt 0 ]  &&  bash -c "(
-    ssh ${FIRST?} sudo cat ${VAULT_TLS_CRT?} |sudo tee ${VAULT_TLS_CRT} >/dev/null
-    ssh ${FIRST?} sudo cat ${VAULT_TLS_KEY?} |sudo tee ${VAULT_TLS_KEY} >/dev/null
+    ssh ${FIRST?} sudo cat ${CRT?} |sudo tee ${CRT} >/dev/null
+    ssh ${FIRST?} sudo cat ${KEY?} |sudo tee ${KEY} >/dev/null
   )"
 
-  sudo chown root.root ${VAULT_TLS_CRT} ${VAULT_TLS_KEY}
-  sudo chmod 444 ${VAULT_TLS_CRT}
-  sudo chmod 400 ${VAULT_TLS_KEY}
+  sudo chown root.root ${CRT} ${KEY}
+  sudo chmod 444 ${CRT}
+  sudo chmod 400 ${KEY}
 
 
   # :( it setup self-signed key but for dns name `Vault` - which won't resolve w/o Consul Connect
   # Replace it w/ a wildcard domain file pair; and make it avail to nomad as well
-  sudo ls -l /opt/vault/tls/tls.crt  /opt/vault/tls/tls.key
+  [ $VAULT ]  &&  sudo ls -l /opt/vault/tls/tls.crt  /opt/vault/tls/tls.key
 
-  for NOVA in nomad vault; do
+  for NOVA in nomad $VAULT; do
     sudo mkdir -m 500 -p      /opt/$NOVA/tls
-    sudo cp $VAULT_TLS_CRT    /opt/$NOVA/tls/tls.crt
-    sudo cp $VAULT_TLS_KEY    /opt/$NOVA/tls/tls.key
+    sudo cp $CRT              /opt/$NOVA/tls/tls.crt
+    sudo cp $KEY              /opt/$NOVA/tls/tls.key
     sudo chown -R $NOVA.$NOVA /opt/$NOVA/tls
     sudo chmod -R go-rwx      /opt/$NOVA/tls
   done
