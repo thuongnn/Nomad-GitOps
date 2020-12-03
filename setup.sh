@@ -260,7 +260,18 @@ plugin "raw_exec" {
   config {
     enabled = true
   }
+}
+
+# @see https://learn.hashicorp.com/nomad/transport-security/enable-tls
+acl {
+  enabled = true
+}
+tls {
+  http = true
+  cert_file = "/opt/nomad/tls/tls.crt"
+  key_file  = "/opt/nomad/tls/tls.key"
 }'
+
 
   echo '
 client {
@@ -309,16 +320,6 @@ vault {
   cert_file  = "/opt/nomad/tls/tls.crt"
   key_file   = "/opt/nomad/tls/tls.key"
   address    = "'${VAULT_ADDR?}'" # active.vault.service.consul:8200"
-}
-
-# @see https://learn.hashicorp.com/nomad/transport-security/enable-tls
-acl {
-  enabled = true
-}
-tls {
-  http = true
-  cert_file = "/opt/nomad/tls/tls.crt"
-  key_file  = "/opt/nomad/tls/tls.key"
 }'
 }
 
