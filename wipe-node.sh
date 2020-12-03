@@ -1,4 +1,4 @@
-#!/bin/zsh -e
+#!/bin/zsh
 
 # cleans out prior hashistack setup
 
@@ -9,27 +9,30 @@ set -x
 # nomad server force-leave
 # consul leave
 
-for CONTAINER in $(sudo docker ps|fgrep -v 'CONTAINER ID'|cut -f1 -d' '); do
-  docker stop  $CONTAINER
-  docker rm -v $CONTAINER
-done
+typeset -a CONTAINERS
+CONTAINERS=( $(sudo docker ps |fgrep -v 'CONTAINER ID' |cut -f1 -d' ' ) ) # |tr '\n' ' ') )
+docker stop   $CONTAINERS
+sleep 10
+docker rm -v  $CONTAINERS
+docker rm -v  $CONTAINERS
+
 
 umount $(df -h |fgrep /var/lib/nomad |rev |cut -f1 -d' ' |rev)  ||  echo 'seems like all unmounted'
 
 
-(
-  set +e
-  for i in  nomad  vault  consul  docker  fabio  docker-ce; do
-    service $i stop
-    apt-get -yqq purge $i
-    systemctl daemon-reload
+set +e
+for i in  nomad  vault  consul  docker  fabio  docker-ce; do
+  service $i stop
+  apt-get -yqq purge $i
+  systemctl disable $i.service
+  systemctl reset-failed
+  systemctl daemon-reload
 
-    find  /opt/$i  /etc/$i  /etc/$i.d  /var/lib/$i  -ls -delete
+  find  /opt/$i  /etc/$i  /etc/$i.d  /var/lib/$i  -ls -delete
 
-    killall $i
-  done
+  killall $i
+done
 
-  rm -fv /etc/ferm/*/nomad.conf /etc/dnsmasq.d/nomad
+rm -fv /etc/ferm/*/nomad.conf /etc/dnsmasq.d/nomad
 
-  service ferm reload
-)
+service ferm reload
