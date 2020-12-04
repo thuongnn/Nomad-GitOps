@@ -95,13 +95,12 @@ function main() {
   # See how many nodes in the cluster already (might be 0)
   # We will put LB on 1st server
   # We will put PV on 2nd server (or if single node cluster - 1st/only server)
-  COUNT=666 # gets re/set below
+  COUNT=0
   N=$(ssh $FIRST "fgrep -c 'encrypt =' $NOMAD_HCL |cat")
   if [ $N -eq 0 ]; then
     # starting cluster - how exciting!  mint some tokens
     TOK_N=$(nomad operator keygen |tr -d ^)
     TOK_C=$(consul keygen |tr -d ^)
-    COUNT=0
   else
     nomad-env-vars
     # ^^ now we can talk to first nomad server
@@ -199,7 +198,7 @@ $VAULT_ADDR
 
   echo "
 
-Fabio  (routing: load balancing, ingress/edge router, https and http2 termination (to http)
+Fabio  (routing: load balancing, ingress/edge router, https and http2 termination (to http))
 ( https://fabiolb.net )
 $FABIO_ADDR
 
@@ -303,7 +302,7 @@ client {
   for N in $(seq 1 ${MAX_PV?}); do
     echo -n '
   host_volume "pv'$N'" {
-    path      = "/pv'$N'"
+    path      = "/pv/'$N'"
     read_only = false
   }'
   done
@@ -424,10 +423,10 @@ function setup-misc() {
 
   # One server in cluster gets marked for hosting repos with Persistent Volume requirements.
   # Keeping things simple, and to avoid complex multi-host solutions like rook/ceph, we'll
-  # pass through this `/pv` dir from the VM/host to containers.  Each container using it
-  # needs to use unique subdirs...
+  # pass through these `/pv/` dirs from the VM/host to containers.  Each container using it
+  # needs to use a unique subdir...
   for N in $(seq 1 ${MAX_PV?}); do
-    sudo mkdir -m777 -p /pv$N
+    sudo mkdir -m777 -p /pv/$N
   done
 
 
