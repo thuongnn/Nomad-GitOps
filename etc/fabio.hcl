@@ -22,8 +22,6 @@ job "fabio" {
     }
 
     network {
-      mbits = 20
-
       port "lb" {
         static = 443
       }
