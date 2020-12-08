@@ -11,6 +11,18 @@ job "[[.NOMAD__SLUG]]" {
       progress_deadline = "10m"
       auto_revert   = true
     }
+    network {
+      port "http" {}
+      port  "db" {
+        static = 5432
+      }
+      port  "dbmy" {
+        static = 3306
+      }
+      [[ if .NOMAD__PORT2_NAME ]]  port "[[.NOMAD__PORT2_NAME]]" {}  [[ end ]]
+      [[ if .NOMAD__PORT3_NAME ]]  port "[[.NOMAD__PORT3_NAME]]" {}  [[ end ]]
+    }
+
     task "[[.NOMAD__SLUG]]" {
       driver = "docker"
 
@@ -18,7 +30,7 @@ job "[[.NOMAD__SLUG]]" {
         image = "[[.CI_REGISTRY_IMAGE]]/[[.CI_COMMIT_REF_SLUG]]:[[.CI_COMMIT_SHA]]"
 
         port_map {
-          # when you see "http" later below, it's this port
+          # when you see "http" above and below, it's this port
           http = [[ or (.NOMAD__PORT) 5000 ]]
 
           [[ if .NOMAD__PORT2 ]]  [[.NOMAD__PORT2_NAME]] = [[.NOMAD__PORT2]]  [[ end ]]
@@ -40,11 +52,6 @@ job "[[.NOMAD__SLUG]]" {
       }
 
       resources {
-        network {
-          port "http" {}
-          [[ if .NOMAD__PORT2_NAME ]]  port "[[.NOMAD__PORT2_NAME]]" {}  [[ end ]]
-          [[ if .NOMAD__PORT3_NAME ]]  port "[[.NOMAD__PORT3_NAME]]" {}  [[ end ]]
-        }
         memory = [[ or (.NOMAD__MEMORY) 300 ]]  # defaults to 300MB
         cpu    = [[ or (.NOMAD__CPU)    100 ]]  # defaults to 100 MHz
       }
@@ -246,14 +253,6 @@ job "[[.NOMAD__SLUG]]" {
         }
       }
 
-      resources {
-        network {
-          port  "db" {
-            static = 5432
-          }
-        }
-      }
-
       vault { policies = [ "read-[[.CI_PROJECT_PATH_SLUG]]" ] }
       template {
         data = "POSTGRESQL_PASSWORD={{with secret \"kv/data/[[.CI_PROJECT_PATH_SLUG]]\"}}{{.Data.data.DB_PW | toJSON}}{{end}}"
@@ -318,15 +317,7 @@ job "[[.NOMAD__SLUG]]" {
       config {
         image = "bitnami/mariadb" # :10.3-debian-10
         port_map {
-          db = 3306
-        }
-      }
-
-      resources {
-        network {
-          port  "db" {
-            static = 3306
-          }
+          dbmy = 3306
         }
       }
 
@@ -348,7 +339,7 @@ EOH
 
       service {
         name = "[[.NOMAD__SLUG]]-db"
-        port = "db"
+        port = "dbmy"
 
         check {
           expose   = true

@@ -1,6 +1,9 @@
 # Minimal basic project using only GitLab CI/CD std. variables
 job "[[.CI_PROJECT_PATH_SLUG]]-[[.CI_COMMIT_REF_SLUG]]" {
   group "[[.CI_PROJECT_PATH_SLUG]]-[[.CI_COMMIT_REF_SLUG]]" {
+    network {
+      port "http" {}
+    }
     task "[[.CI_PROJECT_PATH_SLUG]]-[[.CI_COMMIT_REF_SLUG]]" {
       driver = "docker"
 
@@ -15,12 +18,6 @@ job "[[.CI_PROJECT_PATH_SLUG]]-[[.CI_COMMIT_REF_SLUG]]" {
           server_address = "[[.CI_REGISTRY]]"
           username = "[[.CI_REGISTRY_USER]]"
           password = "[[.CI_REGISTRY_PASSWORD]]"
-        }
-      }
-
-      resources {
-        network {
-          port "http" {}
         }
       }
 

@@ -50,6 +50,11 @@ job "webapp" {
   datacenters = ["dc1"]
 
   group "webapp" {
+    network {
+      port "http" {}
+      port "db"   { static = 5432 }
+    }
+
     task "webapp" {
       driver = "docker"
 
@@ -73,12 +78,6 @@ job "webapp" {
   "db": "postgres"
 }
 EOF
-      }
-
-      resources {
-        network {
-          port "http" {}
-        }
       }
 
       service {
@@ -106,14 +105,6 @@ EOF
         image = "hashicorp/postgres-nomad-demo:latest"
         port_map {
           db = 5432
-        }
-      }
-
-      resources {
-        network {
-          port  "db" {
-            static = 5432
-          }
         }
       }
 

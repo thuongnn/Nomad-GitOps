@@ -18,42 +18,42 @@ job "fabio" {
         //   - https://blog.cloudflare.com/how-we-use-hashicorp-nomad/
         cpu    = 200
         memory = 128
+      }
+    }
 
-        network {
-          mbits = 20
+    network {
+      mbits = 20
 
-          port "lb" {
-            static = 443
-          }
+      port "lb" {
+        static = 443
+      }
 
-          port "http" {
-            static = 80
-          }
+      port "http" {
+        static = 80
+      }
 
-          port "ui" {
-            static = 9998
-          }
+      port "ui" {
+        static = 9998
+      }
 
-          port "timemachine" {
-            static = 8012
-          }
+      port "timemachine" {
+        static = 8012
+      }
 
-          port "ipfs" {
-            static = 4245
-          }
+      port "ipfs" {
+        static = 4245
+      }
 
-          port "webtorrent_seeder" {
-            static = 6881
-          }
+      port "webtorrent_seeder" {
+        static = 6881
+      }
 
-          port "webtorrent_tracker" {
-            static = 6969
-          }
+      port "webtorrent_tracker" {
+        static = 6969
+      }
 
-          port "wolk" {
-            static = 99
-          }
-        }
+      port "wolk" {
+        static = 99
       }
     }
   }

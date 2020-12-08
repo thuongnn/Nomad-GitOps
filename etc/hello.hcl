@@ -7,6 +7,10 @@ job "hello" {
   group "hello" {
     count = 1
 
+    network {
+      port "http" {}
+    }
+
     task "hello" {
       driver = "docker"
       config {
@@ -24,10 +28,6 @@ job "hello" {
       resources {
         cpu    = 100
         memory = 100
-
-        network {
-          port "http" {}
-        }
       }
     }
   }
