@@ -12,9 +12,7 @@ job "[[.NOMAD__SLUG]]" {
       auto_revert   = true
     }
     network {
-      port "http" {
-        to = [[ or (.NOMAD__PORT) 5000 ]]
-      }
+      port "http" {}
       port  "db" {
         static = 5432
       }
@@ -23,6 +21,14 @@ job "[[.NOMAD__SLUG]]" {
       }
       [[ if .NOMAD__PORT2_NAME ]]  port "[[.NOMAD__PORT2_NAME]]" {}  [[ end ]]
       [[ if .NOMAD__PORT3_NAME ]]  port "[[.NOMAD__PORT3_NAME]]" {}  [[ end ]]
+
+      ports {
+        # when you see "http" above and below, it's this port
+        http = [[ or (.NOMAD__PORT) 5000 ]]
+
+        [[ if .NOMAD__PORT2 ]]  [[.NOMAD__PORT2_NAME]] = [[.NOMAD__PORT2]]  [[ end ]]
+        [[ if .NOMAD__PORT3 ]]  [[.NOMAD__PORT3_NAME]] = [[.NOMAD__PORT3]]  [[ end ]]
+      }
     }
 
     task "[[.NOMAD__SLUG]]" {
@@ -48,14 +54,6 @@ job "[[.NOMAD__SLUG]]" {
       resources {
         memory = [[ or (.NOMAD__MEMORY) 300 ]]  # defaults to 300MB
         cpu    = [[ or (.NOMAD__CPU)    100 ]]  # defaults to 100 MHz
-
-        ports {
-          # when you see "http" above and below, it's this port
-          http = [[ or (.NOMAD__PORT) 5000 ]]
-
-          [[ if .NOMAD__PORT2 ]]  [[.NOMAD__PORT2_NAME]] = [[.NOMAD__PORT2]]  [[ end ]]
-          [[ if .NOMAD__PORT3 ]]  [[.NOMAD__PORT3_NAME]] = [[.NOMAD__PORT3]]  [[ end ]]
-        }
       }
 
       # The "service" stanza instructs Nomad to register this task as a service
