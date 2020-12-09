@@ -12,7 +12,9 @@ job "[[.NOMAD__SLUG]]" {
       auto_revert   = true
     }
     network {
-      port "http" {}
+      port "http" {
+        to = [[ or (.NOMAD__PORT) 5000 ]]
+      }
       port  "db" {
         static = 5432
       }
@@ -23,15 +25,15 @@ job "[[.NOMAD__SLUG]]" {
       [[ if .NOMAD__PORT2_NAME ]]  port "[[.NOMAD__PORT2_NAME]]" {}  [[ end ]]
       [[ if .NOMAD__PORT3_NAME ]]  port "[[.NOMAD__PORT3_NAME]]" {}  [[ end ]]
     }
-    resources {
-      ports {
-        # when you see "http" above and below, it's this port
-        http = [[ or (.NOMAD__PORT) 5000 ]]
+    // resources {
+    //   ports {
+    //     # when you see "http" above and below, it's this port
+    //     http = [[ or (.NOMAD__PORT) 5000 ]]
 
-        [[ if .NOMAD__PORT2 ]]  [[.NOMAD__PORT2_NAME]] = [[.NOMAD__PORT2]]  [[ end ]]
-        [[ if .NOMAD__PORT3 ]]  [[.NOMAD__PORT3_NAME]] = [[.NOMAD__PORT3]]  [[ end ]]
-      }
-    }
+    //     [[ if .NOMAD__PORT2 ]]  [[.NOMAD__PORT2_NAME]] = [[.NOMAD__PORT2]]  [[ end ]]
+    //     [[ if .NOMAD__PORT3 ]]  [[.NOMAD__PORT3_NAME]] = [[.NOMAD__PORT3]]  [[ end ]]
+    //   }
+    // }
 
 
     task "[[.NOMAD__SLUG]]" {
