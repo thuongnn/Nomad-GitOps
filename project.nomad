@@ -21,20 +21,9 @@ job "[[.NOMAD__SLUG]]" {
       port  "dbmy" {
         static = 3306
       }
-
       [[ if .NOMAD__PORT2_NAME ]]  port "[[.NOMAD__PORT2_NAME]]" {}  [[ end ]]
       [[ if .NOMAD__PORT3_NAME ]]  port "[[.NOMAD__PORT3_NAME]]" {}  [[ end ]]
     }
-    # resources {
-    #   ports {
-    #     # when you see "http" above and below, it's this port
-    #     http = [[ or (.NOMAD__PORT) 5000 ]]
-
-    #     [[ if .NOMAD__PORT2 ]]  [[.NOMAD__PORT2_NAME]] = [[.NOMAD__PORT2]]  [[ end ]]
-    #     [[ if .NOMAD__PORT3 ]]  [[.NOMAD__PORT3_NAME]] = [[.NOMAD__PORT3]]  [[ end ]]
-    #   }
-    # }
-
 
     task "[[.NOMAD__SLUG]]" {
       driver = "docker"
@@ -56,11 +45,18 @@ job "[[.NOMAD__SLUG]]" {
         [[ end ]]
       }
 
-      #xxxxxx
-      #resources {
-      #  memory = [[ or (.NOMAD__MEMORY) 300 ]]  # defaults to 300MB
-      #  cpu    = [[ or (.NOMAD__CPU)    100 ]]  # defaults to 100 MHz
-      #}
+      resources {
+        memory = [[ or (.NOMAD__MEMORY) 300 ]]  # defaults to 300MB
+        cpu    = [[ or (.NOMAD__CPU)    100 ]]  # defaults to 100 MHz
+
+        ports {
+          # when you see "http" above and below, it's this port
+          http = [[ or (.NOMAD__PORT) 5000 ]]
+
+          [[ if .NOMAD__PORT2 ]]  [[.NOMAD__PORT2_NAME]] = [[.NOMAD__PORT2]]  [[ end ]]
+          [[ if .NOMAD__PORT3 ]]  [[.NOMAD__PORT3_NAME]] = [[.NOMAD__PORT3]]  [[ end ]]
+        }
+      }
 
       # The "service" stanza instructs Nomad to register this task as a service
       # in the service discovery engine, which is currently Consul. This will
