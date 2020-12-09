@@ -39,14 +39,16 @@ function nom-ssh() {
   [ $# -ge 2 ]  &&  TASK=$2    # for rarer TaskGroup case where 2+ Tasks spec-ed in sam Job
   [ $# -lt 2 ]  &&  TASK=$JOB
 
+  ALLOC=$(nomad job status $JOB |egrep -m1 '\srun\s' |cut -f1 -d' ')
+  echo "nomad alloc exec -i -t -task $TASK $ALLOC"
+
   if [ $# -ge 2 ]; then
     shift
     shift
-    nomad alloc exec -i -t -task $TASK $(nomad job status $JOB |egrep -m1 '\srun\s' |cut -f1 -d' ') \
-      "$@"
+    nomad alloc exec -i -t -task $TASK $ALLOC "$@"
   else
-    nomad alloc exec -i -t -task $TASK $(nomad job status $JOB |egrep -m1 '\srun\s' |cut -f1 -d' ') \
-      sh -c '[ -e /bin/zsh ] && zsh  ||  [ -e /bin/bash ] && bash  ||  [ -e /bin/sh ] && sh'
+    nomad alloc exec -i -t -task $TASK $ALLOC \
+      sh -c '([ -e /bin/zsh ] && zsh) || ([ -e /bin/bash ] && bash)  ||  ([ -e /bin/sh ] && sh)'
   fi
 }
 
