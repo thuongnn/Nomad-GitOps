@@ -12,9 +12,7 @@ job "[[.NOMAD__SLUG]]" {
       auto_revert   = true
     }
     network {
-      port "http" {
-        to = [[ or (.NOMAD__PORT) 5000 ]]
-      }
+      port "http" {}
       port  "db" {
         static = 5432
       }
