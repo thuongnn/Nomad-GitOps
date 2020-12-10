@@ -139,8 +139,8 @@ function main() {
   #   "No installed keys could decrypt the message"
   # try either (depending on nomad or consul) inspecting all nodes' contents of file) and:
   echo 'skipping .keyring resets'  ||  (
-    sudo rm /var/lib/nomad/server/serf.keyring; sudo service nomad  restart
-    sudo rm /var/lib/consul/serf/local.keyring; sudo service consul restart
+    sudo rm /opt/nomad/data/server/serf.keyring; sudo service nomad  restart
+    sudo rm /opt/consul/serf/local.keyring;      sudo service consul restart
   )
   # and try again manually
   # (All servers need the same contents)
