@@ -16,22 +16,111 @@ job "[[.NOMAD__SLUG]]" {
         # when you see "http" above and below, it's this port
         to = 5000
       }
+
+      [[ if .NOMAD__PORT2_NAME ]]
+      port "[[.NOMAD__PORT2_NAME]]" {
+        static = [[.NOMAD__PORT2]]
+      }
+      [[ end ]]
+
+      [[ if .NOMAD__PORT3_NAME ]]
+      port "[[.NOMAD__PORT3_NAME]]" {
+        static = [[.NOMAD__PORT3]]
+      }
+      [[ end ]]
+
       [[ if .NOMAD__PG ]]
       port  "db" {
         static = 5432
       }
       [[ end ]]
+
       [[ if .NOMAD__MYSQL ]]
       port  "dbmy" {
         static = 3306
       }
       [[ end ]]
-      #[[ if .NOMAD__PORT2_NAME ]]  port "[[.NOMAD__PORT2_NAME]]" {}  [[ end ]]
-      #[[ if .NOMAD__PORT3_NAME ]]  port "[[.NOMAD__PORT3_NAME]]" {}  [[ end ]]
+    } # end network
 
-      #[[ if .NOMAD__PORT2 ]]  [[.NOMAD__PORT2_NAME]] = [[.NOMAD__PORT2]]  [[ end ]]
-      #[[ if .NOMAD__PORT3 ]]  [[.NOMAD__PORT3_NAME]] = [[.NOMAD__PORT3]]  [[ end ]]
+
+    # The "service" stanza instructs Nomad to register this task as a service
+    # in the service discovery engine, which is currently Consul. This will
+    # make the service addressable after Nomad has placed it on a host and
+    # port.
+    #
+    # For more information and examples on the "service" stanza, please see
+    # the online documentation at:
+    #
+    #     https://www.nomadproject.io/docs/job-specification/service.html
+    #
+    service {
+      name = "[[.NOMAD__SLUG]]"
+      tags = [
+        "urlprefix-[[.NOMAD__HOSTNAME]]:443/",
+        # automatically redirect any http traffic to https
+        "urlprefix-[[.NOMAD__HOSTNAME]]:80/ redirect=308,https://[[.NOMAD__HOSTNAME]]/"
+        [[ if .NOMAD__HOSTNAME2 ]]
+          ,"urlprefix-[[.NOMAD__HOSTNAME2]]:443/"
+          ,"urlprefix-[[.NOMAD__HOSTNAME2]]:80/ redirect=308,https://[[.NOMAD__HOSTNAME2]]/"
+        [[ end ]]
+        [[ if .NOMAD__HOSTNAME3 ]]
+          ,"urlprefix-[[.NOMAD__HOSTNAME3]]:443/"
+          ,"urlprefix-[[.NOMAD__HOSTNAME3]]:80/ redirect=308,https://[[.NOMAD__HOSTNAME3]]/"
+        [[ end ]]
+      ]
+      port = "http"
+      check {
+        name     = "alive"
+        # repo can set this to "tcp" (defaults to "http") - can help for debugging 1st deploy..
+        type     = "[[ or (.NOMAD__CHECK_PROTOCOL) "http" ]]"
+        port     = "http"
+        path     = "/"
+        interval = "10s"
+        timeout  = "2s"
+        [[ if .NOMAD__HEALTH_TIMEOUT ]]
+        # give container (eg: having issues) custom time amount to stay up for debugging before
+        # 1st health check (eg: "3600s" value would be 1hr)
+        check_restart {
+          grace = "[[.NOMAD__HEALTH_TIMEOUT]]"
+        }
+        [[ end ]]
+      }
     }
+
+
+    [[ if .NOMAD__PORT2 ]]
+    service {
+      name = "[[.NOMAD__SLUG]]-[[.NOMAD__PORT2_NAME]]"
+      tags = ["urlprefix-[[.NOMAD__HOSTNAME]]:[[.NOMAD__PORT2]]/"]
+      port = "[[.NOMAD__PORT2_NAME]]"
+      check {
+        name     = "alive"
+        type     = "[[ or (.NOMAD__CHECK_PROTOCOL) "http" ]]"
+        port     = "http"
+        path     = "/"
+        interval = "10s"
+        timeout  = "2s"
+      }
+    }
+    [[ end ]]
+
+    [[ if .NOMAD__PORT3 ]]
+    service {
+      name = "[[.NOMAD__SLUG]]-[[.NOMAD__PORT3_NAME]]"
+      tags = ["urlprefix-[[.NOMAD__HOSTNAME]]:[[.NOMAD__PORT3]]/"]
+      port = "[[.NOMAD__PORT3_NAME]]"
+      check {
+        name     = "alive"
+        type     = "[[ or (.NOMAD__CHECK_PROTOCOL) "http" ]]"
+        port     = "http"
+        path     = "/"
+        interval = "10s"
+        timeout  = "2s"
+      }
+    }
+    [[ end ]]
+    # end services
+
 
     task "[[.NOMAD__SLUG]]" {
       driver = "docker"
@@ -47,6 +136,13 @@ job "[[.NOMAD__SLUG]]" {
           password = "[[ or (.CI_R2_PASS) .CI_REGISTRY_PASSWORD ]]"
         }
 
+        ports = [
+          "http"
+          [[ if .NOMAD__PORT2 ]]  ,[[.NOMAD__PORT2]]  [[ end ]]
+          [[ if .NOMAD__PORT3 ]]  ,[[.NOMAD__PORT3]]  [[ end ]]
+        ]
+
+
         [[ if .NOMAD__JOB_TASK_CONFIG ]]
           # arbitrary config a .gitlab-ci.yml can specify
           [[.NOMAD__JOB_TASK_CONFIG]]
@@ -58,88 +154,12 @@ job "[[.NOMAD__SLUG]]" {
         cpu    = [[ or (.NOMAD__CPU)    100 ]]  # defaults to 100 MHz
       }
 
-      # The "service" stanza instructs Nomad to register this task as a service
-      # in the service discovery engine, which is currently Consul. This will
-      # make the service addressable after Nomad has placed it on a host and
-      # port.
-      #
-      # For more information and examples on the "service" stanza, please see
-      # the online documentation at:
-      #
-      #     https://www.nomadproject.io/docs/job-specification/service.html
-      #
-      service {
-        name = "[[.NOMAD__SLUG]]"
-        tags = [
-          "urlprefix-[[.NOMAD__HOSTNAME]]:443/",
-          # automatically redirect any http traffic to https
-          "urlprefix-[[.NOMAD__HOSTNAME]]:80/ redirect=308,https://[[.NOMAD__HOSTNAME]]/"
-          [[ if .NOMAD__HOSTNAME2 ]]
-            ,"urlprefix-[[.NOMAD__HOSTNAME2]]:443/"
-            ,"urlprefix-[[.NOMAD__HOSTNAME2]]:80/ redirect=308,https://[[.NOMAD__HOSTNAME2]]/"
-          [[ end ]]
-          [[ if .NOMAD__HOSTNAME3 ]]
-            ,"urlprefix-[[.NOMAD__HOSTNAME3]]:443/"
-            ,"urlprefix-[[.NOMAD__HOSTNAME3]]:80/ redirect=308,https://[[.NOMAD__HOSTNAME3]]/"
-          [[ end ]]
-        ]
-        port = "http"
-        check {
-          name     = "alive"
-          # repo can set this to "tcp" (defaults to "http") - can help for debugging 1st deploy..
-          type     = "[[ or (.NOMAD__CHECK_PROTOCOL) "http" ]]"
-          port     = "http"
-          path     = "/"
-          interval = "10s"
-          timeout  = "2s"
-          [[ if .NOMAD__HEALTH_TIMEOUT ]]
-          # give container (eg: having issues) custom time amount to stay up for debugging before
-          # 1st health check (eg: "3600s" value would be 1hr)
-          check_restart {
-            grace = "[[.NOMAD__HEALTH_TIMEOUT]]"
-          }
-          [[ end ]]
-        }
-      }
-
 
       [[ if .NOMAD__JOB_TASK ]]
         # arbitrary config a .gitlab-ci.yml can specify
         [[.NOMAD__JOB_TASK]]
       [[ end ]]
 
-
-      [[ if .NOMAD__PORT2 ]]
-      service {
-        name = "[[.NOMAD__SLUG]]-[[.NOMAD__PORT2_NAME]]"
-        tags = ["urlprefix-[[.NOMAD__HOSTNAME]]:[[.NOMAD__PORT2]]/"]
-        port = "[[.NOMAD__PORT2_NAME]]"
-        check {
-          name     = "alive"
-          type     = "[[ or (.NOMAD__CHECK_PROTOCOL) "http" ]]"
-          port     = "http"
-          path     = "/"
-          interval = "10s"
-          timeout  = "2s"
-        }
-      }
-      [[ end ]]
-
-      [[ if .NOMAD__PORT3 ]]
-      service {
-        name = "[[.NOMAD__SLUG]]-[[.NOMAD__PORT3_NAME]]"
-        tags = ["urlprefix-[[.NOMAD__HOSTNAME]]:[[.NOMAD__PORT3]]/"]
-        port = "[[.NOMAD__PORT3_NAME]]"
-        check {
-          name     = "alive"
-          type     = "[[ or (.NOMAD__CHECK_PROTOCOL) "http" ]]"
-          port     = "http"
-          path     = "/"
-          interval = "10s"
-          timeout  = "2s"
-        }
-      }
-      [[ end ]]
 
 
       [[ if .NOMAD__VAULT ]]
@@ -391,7 +411,13 @@ EOH
   }
 
 
-  [[ if (.NOMAD__PV) or (.NOMAD__PV_DB) ]]
+  [[ if .NOMAD__PV ]]
+  constraint {
+    attribute = "${meta.kind}"
+    set_contains = "pv"
+  }
+  [[ end ]]
+  [[ if .NOMAD__PV_DB ]]
   constraint {
     attribute = "${meta.kind}"
     set_contains = "pv"
