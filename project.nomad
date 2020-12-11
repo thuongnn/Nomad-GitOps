@@ -77,13 +77,15 @@ job "[[.NOMAD__SLUG]]" {
         path     = "/"
         interval = "10s"
         timeout  = "2s"
-        [[ if .NOMAD__HEALTH_TIMEOUT ]]
-        # give container (eg: having issues) custom time amount to stay up for debugging before
-        # 1st health check (eg: "3600s" value would be 1hr)
         check_restart {
+          limit = 3  # auto-restart task when healthcheck fails 3x in a row
+
+          [[ if .NOMAD__HEALTH_TIMEOUT ]]
+          # give container (eg: having issues) custom time amount to stay up for debugging before
+          # 1st health check (eg: "3600s" value would be 1hr)
           grace = "[[.NOMAD__HEALTH_TIMEOUT]]"
+          [[ end ]]
         }
-        [[ end ]]
       }
     }
 
