@@ -53,9 +53,10 @@ deploy:
     - rm /tmp/env.json
 
     - echo deploying to https://$NOMAD__HOSTNAME
-    - nomad validate project.hcl
-    - nomad plan     project.hcl 2>&1 |sed 's/\(password[^ \t]*[ \t]*\).*/\1 ... /' || echo
-    - nomad run      project.hcl
+    - nomad validate    project.hcl
+    - nomad plan        project.hcl 2>&1 |sed 's/\(password[^ \t]*[ \t]*\).*/\1 ... /' || echo
+    - grep -vi password project.hcl
+    - nomad run         project.hcl
     - echo deployed to https://$NOMAD__HOSTNAME
 
   environment:
