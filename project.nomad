@@ -11,6 +11,12 @@ job "[[.NOMAD__SLUG]]" {
       progress_deadline = "10m"
       auto_revert   = true
     }
+    restart {
+      attempts = 3
+      delay    = "15s"
+      interval = "30m"
+      mode     = "fail"
+    }
     network {
       port "http" {
         # when you see "http" above and below, it's this port
@@ -80,11 +86,9 @@ job "[[.NOMAD__SLUG]]" {
         check_restart {
           limit = 3  # auto-restart task when healthcheck fails 3x in a row
 
-          [[ if .NOMAD__HEALTH_TIMEOUT ]]
           # give container (eg: having issues) custom time amount to stay up for debugging before
           # 1st health check (eg: "3600s" value would be 1hr)
-          grace = "[[.NOMAD__HEALTH_TIMEOUT]]"
-          [[ end ]]
+          grace = "[[ or (.NOMAD__HEALTH_TIMEOUT) "20s" ]]"
         }
       }
     }
