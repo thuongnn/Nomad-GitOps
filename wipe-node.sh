@@ -1,6 +1,8 @@
 #!/bin/zsh
 
 # cleans out prior hashistack setup
+#
+#  ** PLEASE **  look this script over in its entirety before running ;-)
 
 
 [  "$USER" != "root" ]  &&  echo run as root on a node in cluster  &&  exit 1
@@ -28,7 +30,7 @@ for i in  nomad  vault  consul  docker  fabio  docker-ce; do
   systemctl reset-failed
   systemctl daemon-reload
 
-  find  /opt/$i  /etc/$i  /etc/$i.d  /var/lib/$i  -ls -delete
+  find  /opt/$i  /etc/$i  /etc/$i.d  /var/lib/$i  -delete
 
   killall $i
 done
