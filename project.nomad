@@ -153,6 +153,13 @@ job "[[.NOMAD__SLUG]]" {
           # arbitrary config a .gitlab-ci.yml can specify
           [[.NOMAD__JOB_TASK_CONFIG]]
         [[ end ]]
+
+        mounts = [{
+          type = "bind"
+          readonly = true
+          source = "/opt/.petabox/[[.NOMAD_SLUG]]"
+          target = "/kv"
+        }]
       }
 
       resources {
