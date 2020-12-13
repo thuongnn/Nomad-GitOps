@@ -154,12 +154,9 @@ job "[[.NOMAD__SLUG]]" {
           [[.NOMAD__JOB_TASK_CONFIG]]
         [[ end ]]
 
-        mounts = [{
-          type = "volume"
-          readonly = true
-          source = "/opt/.petabox/[[.NOMAD__SLUG]]"
-          target = "/kv"
-        }]
+        volumes = [
+          "/kv/[[.NOMAD__SLUG]]:/kv"
+        ]
       }
 
       resources {
