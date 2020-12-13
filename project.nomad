@@ -155,7 +155,7 @@ job "[[.NOMAD__SLUG]]" {
         [[ end ]]
 
         mounts = [{
-          type = "bind"
+          type = "volume"
           readonly = true
           source = "/opt/.petabox/[[.NOMAD__SLUG]]"
           target = "/kv"
