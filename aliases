@@ -155,7 +155,7 @@ function nom-urls() {
 function _nom-url() {
   # logically private helper function
   URL=$(wget -qO- --header "X-Nomad-Token: ${NOMAD_TOKEN?}" ${NOMAD_ADDR?}/v1/job/$JOB \
-    | jq -r '.TaskGroups[0].Tasks[0].Services[0].Tags' \
+    | jq -r '.TaskGroups[0].Services[0].Tags' \
     | fgrep :443 |tr -d '", ' |perl -pe 's/:443//; s=^urlprefix\-=https://='
   )
 }
