@@ -144,8 +144,8 @@ job "[[.NOMAD__SLUG]]" {
 
         ports = [
           "http"
-          "[[ if .NOMAD__PORT2 ]]  ,[[.NOMAD__PORT2]]  [[ end ]]"
-          "[[ if .NOMAD__PORT3 ]]  ,[[.NOMAD__PORT3]]  [[ end ]]"
+          [[ if .NOMAD__PORT2 ]]  ,"[[.NOMAD__PORT2_NAME]]"  [[ end ]]
+          [[ if .NOMAD__PORT3 ]]  ,"[[.NOMAD__PORT3_NAME]]"  [[ end ]]
         ]
 
 
