@@ -1,9 +1,7 @@
 #!/bin/zsh -e
 
 function xxx() {
-
-CERTS=home:/opt/.petabox/us.archive.org; env NFSHOME=1 ~/dev/nomad/setup.sh  ${CERTS?}.combined.crt  ${CERTS}.nopassword.key  kube-a-08
-
+  CERTS=home:/opt/.petabox/us.archive.org; env NFSHOME=1 ~/dev/nomad/setup.sh  ${CERTS?}.combined.crt  ${CERTS}.nopassword.key  kube-a-08
 }
 
 # One time setup of server(s) to make a nomad cluster.
@@ -11,12 +9,12 @@ CERTS=home:/opt/.petabox/us.archive.org; env NFSHOME=1 ~/dev/nomad/setup.sh  ${C
 # Assumes you are creating cluster with debian/ubuntu VMs/baremetals,
 # that you have ssh and sudo access to.
 #
-# Current Overview, assuming 2 or 3 node cluster:
+# Current Overview:
 #   Installs nomad server and client on all nodes, securely talking together & electing a leader
-#   Installs consul on first
+#   Installs consul server and client on all nodes
 #   Installs load balancer "fabio" on first two nodes
 #      (in case you want to use multiple IP addresses for deployments in case one LB/node is out)
-#   Optionally installs gitlab runner on first node
+#   Optionally installs gitlab runner on 1st node
 #   Sets up Persistent Volume subdirs on 1st node - deployments needing PV only schedule to this node
 
 MYDIR=${0:a:h}
@@ -37,10 +35,6 @@ To simplify, we'll reuse TLS certs, settingup ACL and TLS for nomad.
 
 "  &&  exit 1
 
-
-# are we now installing and setting up X or not?
-[ -z ${CONSUL+unset} ] && CONSUL=consul
-[ -z ${NOMAD+notset} ] &&  NOMAD=nomad
 
 # avoid any environment vars from CLI poisoning..
 unset   NOMAD_TOKEN
@@ -111,14 +105,7 @@ function main() {
 
 function config() {
   export NOMAD_COUNT=${CLUSTER_SIZE?}
-
-  # giving up on 2+ nodes w/ consul -- keep repedatedly dumassing themselves out of cluster
-  # even though they elected a leader and communicated just fine, all decrypts are identical...
-  # with messages like this after ~60s
-  # memberlist: failed to receive: No installed keys could decrypt the message from=...
-  # cries in beer
   export CONSUL_COUNT=${CLUSTER_SIZE?}
-  export CONSUL_COUNT=1 # xxx
 
   # We will put PV on 1st server
   # We will put LB/fabio on first two servers
@@ -199,8 +186,6 @@ function customize2() {
   )
   # and try again manually
   # (All servers need the same contents)
-
-  [ $COUNT -gt 0 ]  [ $COUNT -lt ${CONSUL_COUNT?} ]  &&  consul join ${FIRST?}
 
   set +x
 
