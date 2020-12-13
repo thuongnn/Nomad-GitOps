@@ -157,7 +157,7 @@ job "[[.NOMAD__SLUG]]" {
         mounts = [{
           type = "bind"
           readonly = true
-          source = "/opt/.petabox/[[.NOMAD_SLUG]]"
+          source = "/opt/.petabox/[[.NOMAD__SLUG]]"
           target = "/kv"
         }]
       }
