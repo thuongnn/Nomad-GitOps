@@ -12,9 +12,8 @@ CERTS=home:/opt/.petabox/us.archive.org; env NFSHOME=1 ~/dev/nomad/setup.sh  ${C
 # that you have ssh and sudo access to.
 #
 # Current Overview, assuming 2 or 3 node cluster:
-#   Installs consul on first
-#   Installs vault and unseals it on first
 #   Installs nomad server and client on all nodes, securely talking together & electing a leader
+#   Installs consul on first
 #   Installs load balancer "fabio" on first two nodes
 #      (in case you want to use multiple IP addresses for deployments in case one LB/node is out)
 #   Optionally installs gitlab runner on first node
@@ -34,35 +33,30 @@ Run this script on FIRST node in your cluster, while ssh-ed in.
 
 If invoking cmd-line has env var NFSHOME=1 then we'll setup /home/ r/o and r/w mounts.
 
-Invoking with env var VAULT= will _skip_ setting up a vault service.
-
-To simplify, we'll setup and unseal your vault server on the same/first server that the
-fabio load balancer goes to so we can reuse TLS certs.  This will also setup ACL and TLS for nomad.
+To simplify, we'll reuse TLS certs, settingup ACL and TLS for nomad.
 
 "  &&  exit 1
 
 
 # are we now installing and setting up X or not?
 [ -z ${CONSUL+unset} ] && CONSUL=consul
-[ -z ${VAULT+notset} ] &&  VAULT=vault
 [ -z ${NOMAD+notset} ] &&  NOMAD=nomad
 
 # avoid any environment vars from CLI poisoning..
 unset   NOMAD_TOKEN
 unset  CONSUL_TOKEN
-unset   VAULT_TOKEN
 
 
-function runner() {
-  if [ "$1" = "auto" ]; then
+function main() {
+  if [ "$1" = "baseline"  -o  "$1" = "customize"  -o  "$1" = "customize2" ]; then
     set -x
     FIRST=$2
     COUNT=$3
     CLUSTER_SIZE=$4
 
-    daemons-count
+    config
 
-    main
+    "$1"
     exit 0
   else
     FIRST=$(hostname -f)
@@ -74,20 +68,32 @@ function runner() {
     typeset -a $NODES
     NODES=( $FIRST "$@" )
 
-    daemons-count
+    set -x
+    config
 
-    # check if this cluster will _NOT_ have a vault at all..
-    [ $VAULT ]  ||  NO_VAULT=1
+    # use the TLS_CRT and TLS_KEY params
+    ( COUNT=0 setup-certs )
 
-    # get the first node https setup out of the way
-    ( COUNT=0 VAULT= NOMAD= setup-certs )
-
-    # install & setup consul first across nodes - so they can properly group up and elect a leader
+    # install & setup stock nomad & consul
     COUNT=0
     for NODE in $NODES; do
-      ( set -x; ssh $NODE env NOMAD= VAULT= NFSHOME=$NFSHOME $MYDIR/setup.sh auto ${FIRST?} ${COUNT?} ${CLUSTER_SIZE?} )
+      ( set -x; ssh $NODE env NFSHOME=$NFSHOME $MYDIR/setup.sh baseline ${FIRST?} ${COUNT?} ${CLUSTER_SIZE?} )
       let "COUNT=$COUNT+1"
-      [ "${COUNT?}" = "${CONSUL_COUNT?}" ]  &&  break
+    done
+
+    # customize nomad & consul
+    # we have to make _all_ nomad servers VERY angry first, before we can get a leader and token
+    COUNT=0
+    for NODE in $NODES; do
+      ( set -x; ssh $NODE env NFSHOME=$NFSHOME $MYDIR/setup.sh customize ${FIRST?} ${COUNT?} ${CLUSTER_SIZE?} )
+      let "COUNT=$COUNT+1"
+    done
+
+    # 🤦‍♀️ now we can finally get them to cluster up, elect a leader, and do their f***ing job
+    COUNT=0
+    for NODE in $NODES; do
+      ( set -x; ssh $NODE env NFSHOME=$NFSHOME $MYDIR/setup.sh customize2 ${FIRST?} ${COUNT?} ${CLUSTER_SIZE?} )
+      let "COUNT=$COUNT+1"
     done
 
     # ugh, facepalm
@@ -95,20 +101,7 @@ function runner() {
       ssh $NODE 'sudo rm /opt/consul/serf/local.keyring;  sudo service consul restart;  echo'
     done
 
-
-    # install & setup vault
-    COUNT=0
-    [ $VAULT ]  &&  (
-      ( set -x; ssh $FIRST env CONSUL= NOMAD= NFSHOME=$NFSHOME $MYDIR/setup.sh auto ${FIRST?} ${COUNT?} ${CLUSTER_SIZE?} )
-    )
-
-    # install & setup nomad
-    COUNT=0
-    for NODE in $NODES; do
-      ( set -x; ssh $NODE env CONSUL= VAULT= NFSHOME=$NFSHOME $MYDIR/setup.sh auto ${FIRST?} ${COUNT?} ${CLUSTER_SIZE?} )
-      let "COUNT=$COUNT+1"
-    done
-
+    finish
     exit 0
   fi
 
@@ -116,7 +109,9 @@ function runner() {
 }
 
 
-function daemons-count() {
+function config() {
+  export NOMAD_COUNT=${CLUSTER_SIZE?}
+
   # giving up on 2+ nodes w/ consul -- keep repedatedly dumassing themselves out of cluster
   # even though they elected a leader and communicated just fine, all decrypts are identical...
   # with messages like this after ~60s
@@ -125,81 +120,75 @@ function daemons-count() {
   export CONSUL_COUNT=${CLUSTER_SIZE?}
   export CONSUL_COUNT=1 # xxx
 
-  # giving up on 2+ nodes w/ nomad -- cant even get one started unless &*!#$3ing cluster of 1
-  # cries in beer
-  export NOMAD_COUNT=${CLUSTER_SIZE?}
-  export NOMAD_COUNT=1 # xxx
-
   # We will put PV on 1st server
   # We will put LB/fabio on first two servers
   export LB_COUNT=2
-}
 
 
-function main() {
-  export  VAULT_ADDR="https://${FIRST?}:8200"
   export  NOMAD_ADDR="https://${FIRST?}:4646"
   export CONSUL_ADDR="http://localhost:8500"
   export  FABIO_ADDR="http://localhost:9998"
   export MAX_PV=20
   export FIRSTIP=$(host ${FIRST?} | perl -ane 'print $F[3] if $F[2] eq "address"')
 
+  # find daemon config files
+   NOMAD_HCL=$(dpkg -L nomad  2>/dev/null |egrep ^/etc/ |egrep -m1 '\.hcl$' || echo -n '')
+  CONSUL_HCL=$(dpkg -L consul 2>/dev/null |egrep ^/etc/ |egrep -m1 '\.hcl$' || echo -n '')
+}
 
+
+function baseline() {
   cd /tmp
 
   # install docker if not already present
-  [ $NOMAD ]  &&  $MYDIR/install-docker-ce.sh
+  $MYDIR/install-docker-ce.sh
 
-  [ $CONSUL ]  &&  (
-    # install binaries and service files
-    #   eg: /usr/bin/nomad  /etc/nomad.d/nomad.hcl  /usr/lib/systemd/system/nomad.service
+  # install binaries and service files
+  #   eg: /usr/bin/nomad  /etc/nomad.d/nomad.hcl  /usr/lib/systemd/system/nomad.service
 
-    curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
-    sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
-    sudo apt-get -yqq update
-  )
+  curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
+  sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
+  sudo apt-get -yqq update
 
-  sudo apt-get -yqq install  $CONSUL  $VAULT  $NOMAD
+  sudo apt-get -yqq install  nomad  consul
 
-  # find daemon config files
-  [ $CONSUL ]  &&  CONSUL_HCL=$(dpkg -L consul |egrep ^/etc/ |egrep -m1 '\.hcl$')
-  [ $VAULT  ]  &&   VAULT_HCL=$(dpkg -L vault  |egrep ^/etc/ |egrep -m1 '\.hcl$')
-  [ $NOMAD  ]  &&   NOMAD_HCL=$(dpkg -L nomad  |egrep ^/etc/ |egrep -m1 '\.hcl$')
+
+  config
 
   # restore original config (if reran)
-  [ $CONSUL ]  &&  [ -e $CONSUL_HCL.orig ]  &&  sudo cp -p $CONSUL_HCL.orig $CONSUL_HCL
-  [ $NOMAD  ]  &&  [ -e  $NOMAD_HCL.orig ]  &&  sudo cp -p  $NOMAD_HCL.orig  $NOMAD_HCL
-  [ $VAULT  ]  &&  [ -e  $VAULT_HCL.orig ]  &&  sudo cp -p  $VAULT_HCL.orig  $VAULT_HCL
+  [ -e  $NOMAD_HCL.orig ]  &&  sudo cp -p  $NOMAD_HCL.orig  $NOMAD_HCL
+  [ -e $CONSUL_HCL.orig ]  &&  sudo cp -p $CONSUL_HCL.orig $CONSUL_HCL
 
 
   # stash copies of original config
-  [ $CONSUL ]  &&  sudo cp -p $CONSUL_HCL $CONSUL_HCL.orig
-  [ $NOMAD  ]  &&  sudo cp -p  $NOMAD_HCL  $NOMAD_HCL.orig
-  [ $VAULT  ]  &&  sudo cp -p  $VAULT_HCL  $VAULT_HCL.orig
+  sudo cp -p  $NOMAD_HCL  $NOMAD_HCL.orig
+  sudo cp -p $CONSUL_HCL $CONSUL_HCL.orig
 
 
-
+  # start up uncustomized versions of nomad and consul
   setup-certs
-  [ $CONSUL ]  &&  setup-misc
+  setup-misc
   setup-daemons
-
-  # Get consul running first
-  # Once consul is up, we can setup and get running Vault and unseal it
-  [ $CONSUL ]  &&  setup-consul
-  [ $VAULT  ]  &&  setup-vault
-  [ $NOMAD  ]  &&  setup-nomad
+}
 
 
+function customize() {
+  setup-nomad
+  setup-consul
+}
+
+
+function customize2() {
   echo "================================================================================"
-  [ $CONSUL ]  &&  consul members
+  consul members
   echo "================================================================================"
-  [ $NOMAD  ]  &&  nomad-env-vars
-  [ $NOMAD  ]  &&  nomad server members
+  nomad-env-vars
+  nomad server members
   echo "================================================================================"
 
 
 
-  [ $NOMAD ]  &&  [ ${COUNT?} -le ${LB_COUNT?} ]  &&  nomad run ${MYDIR?}/etc/fabio.hcl
+  [ ${COUNT?} -le ${LB_COUNT?} ]  &&  nomad run ${MYDIR?}/etc/fabio.hcl
 
   # NOTE: if you see failures join-ing and messages like:
   #   "No installed keys could decrypt the message"
@@ -212,41 +201,34 @@ function main() {
   # (All servers need the same contents)
 
   [ $COUNT -gt 0 ]  [ $COUNT -lt ${CONSUL_COUNT?} ]  &&  consul join ${FIRST?}
-  [ $COUNT -gt 0 ]  &&  nomad server join ${FIRSTIP?}
 
   set +x
 
   echo "================================================================================"
-  [ $CONSUL ]  &&  ( set -x; consul members )
+  ( set -x; consul members )
   echo "================================================================================"
-  [ $NOMAD  ]  &&  ( set -x; nomad server members )
+  ( set -x; nomad server members )
   echo "================================================================================"
-  [ $NOMAD  ]  &&  ( set -x; nomad node status )
+  ( set -x; nomad node status )
   echo "================================================================================"
-
-
-  [ $NOMAD ]  &&  [ $COUNT -eq 0 ]  &&  (
-    echo "Setup GitLab runner in your cluster?\n"
-    echo "Enter 'yes' now to set up a GitLab runner in your cluster"
-    read cont
-
-    if [ "$cont" = "yes" ]; then
-      ${MYDIR?}/setup-runner.sh
-    fi
-  )
-
-
-  let "LAST=$CLUSTER_SIZE-1"
-  [ $NOMAD ]  &&  [ $COUNT -eq $LAST ]  &&  welcome
 }
 
 
-function welcome() {
+function finish() { # xxx
+  echo "Setup GitLab runner in your cluster?\n"
+  echo "Enter 'yes' now to set up a GitLab runner in your cluster"
+  read cont
+
+  if [ "$cont" = "yes" ]; then
+    ${MYDIR?}/setup-runner.sh
+  fi
+
+
   echo "
 
 💥 CONGRATULATIONS!  Your cluster is setup. 💥
 
-You can get started with the UI for: nomad consul $VAULT fabio here:
+You can get started with the UI for: nomad consul fabio here:
 
 Nomad  (deployment: managements & scheduling):
 ( https://www.nomadproject.io )
@@ -256,16 +238,6 @@ $NOMAD_ADDR
 Consul (networking: service discovery & health checks, service mesh, envoy, secrets storage):
 ( https://www.consul.io )
 $CONSUL_ADDR
-"
-
-  [ $VAULT ]  &&  echo "
-Vault  (security: secrets r/w)
-( https://vaultproject.io )
-$VAULT_ADDR
-( login with $HOME/.vault-token - keep this safe!)
-"
-
-  echo "
 
 Fabio  (routing: load balancing, ingress/edge router, https and http2 termination (to http))
 ( https://fabiolb.net )
@@ -322,10 +294,31 @@ function configure-nomad() {
   [ $COUNT -eq 0 ]  &&  TOK_N=$(nomad operator keygen |tr -d ^ |cat)
   [ $COUNT -ge 1 ]  &&  TOK_N=$(ssh ${FIRST?} "egrep  'encrypt\s*=' ${NOMAD_HCL?}"  |cut -f2- -d= |tr -d '\t "' |cat)
 
+  set +x
+
   [ $COUNT -lt ${NOMAD_COUNT?} ]  &&  echo '
+name = "'$(hostname -s)'"
+
 server {
   encrypt = "'${TOK_N?}'"
-}'
+
+  server_join {
+    retry_join = ["'${FIRSTIP?}'"]
+    retry_max = 0
+  }
+}
+
+# some of this could be redundant -- check defaults in node v1+
+addresses {
+  http = "0.0.0.0"
+}
+
+advertise {
+  http = "{{ GetInterfaceIP \"eth0\" }}"
+  rpc = "{{ GetInterfaceIP \"eth0\" }}"
+  serf = "{{ GetInterfaceIP \"eth0\" }}"
+}
+'
 
 
   # ensure docker jobs can mount volumes
@@ -364,6 +357,7 @@ client {
   local KIND='worker'
   [ ${COUNT?} -le ${LB_COUNT?} ]  &&  KIND="$KIND,lb"
   [ ${COUNT?} -eq 0 ]             &&  KIND="$KIND,pv"
+  [ ${COUNT?} -gt 0 ]             &&  KIND="$KIND,xxx"
   echo '
   meta {
     "kind" = "'$KIND'"
@@ -395,19 +389,7 @@ client {
   echo '
 }'
 
-
-  # configure vault section of nomad
-  [ $NO_VAULT ]  ||  (
-    VAULT_TOKEN=$(cat $HOME/.vault-token)
-    echo '
-vault {
-  enabled    = true
-  token      = "'${VAULT_TOKEN?}'"
-  cert_file  = "/opt/nomad/tls/tls.crt"
-  key_file   = "/opt/nomad/tls/tls.key"
-  address    = "'${VAULT_ADDR?}'" # active.vault.service.consul:8200"
-}'
-  )
+  set -x
 }
 
 
@@ -431,73 +413,10 @@ export NOMAD_TOKEN="$(fgrep 'Secret ID' $NOMACL |cut -f2- -d= |tr -d ' ') |tee $
 }
 
 
-function setup-vault() {
-  # switch `storage "file"` to `storage "consul"`
-  sudo perl -i -0pe 's/^storage "file".*?}//ms'   $VAULT_HCL
-
-  echo '
-    storage "consul" {
-      address = "127.0.0.1:8500"
-      path    = "vault/"
-  }' |sudo tee -a $VAULT_HCL
-
-
-  # https://learn.hashicorp.com/vault/getting-started/deploy
-  # update vault config
-
-  [ ${COUNT?} -gt 0 ]  &&  return
-
-
-  # fire up vault and unseal it
-  sudo systemctl restart vault  &&  sleep 10
-
-  echo "Vault initializing with ${VAULT_ADDR?}"
-  local VFI=/var/lib/.vault
-  vault operator init |sudo tee $VFI
-  sudo chmod 400 $VFI
-
-  export VAULT_TOKEN=$(sudo grep 'Initial Root Token:' $VFI |cut -f2- -d: |tr -d ' ')
-
-  set +x
-  vault operator unseal $(sudo grep 'Unseal Key 1:' $VFI |cut -f2- -d: |tr -d ' ')
-  vault operator unseal $(sudo grep 'Unseal Key 2:' $VFI |cut -f2- -d: |tr -d ' ')
-  vault operator unseal $(sudo grep 'Unseal Key 3:' $VFI |cut -f2- -d: |tr -d ' ')
-  sleep 10
-  echo "${VAULT_TOKEN?}" | vault login -
-
-  echo '
-
-
-💥 CONGRATULATIONS!  Your vault is setup and unsealed. 💥
-
-
-You ** MUST ** now copy this somewhere VERY safe, ideally one Unseal Key to each of trusted people.
-
-
-  '
-  sudo egrep . $VFI
-  sudo rm -fv  $VFI
-  echo '
-
-
-
-💥 TYPE yes ONCE COPIED CONTENTS ABOVE TO CONTINUE (or CTL-C to abort):
-  '
-  cont=
-  while [ "$cont" != "yes" ]; do
-    read cont
-  done
-
-  set -x
-
-  vault secrets enable -version=2 kv
-  vault secrets list -detailed
-}
-
 
 function setup-misc() {
   ${MYDIR?}/ports-unblock.sh
-  sudo service docker restart
+  sudo service docker restart  ||  echo 'no docker yet'
 
   [ ${COUNT?} -eq 0 ]  &&  (
     # One server in cluster gets marked for hosting repos with Persistent Volume requirements.
@@ -512,7 +431,6 @@ function setup-misc() {
 
   # This gets us DNS resolving on archive.org VMs, at the VM level (not inside containers)-8
   # for hostnames like:
-  #   active.vault.service.consul
   #   services-clusters.service.consul
   [ -e /etc/dnsmasq.d/ ]  &&  (
     echo "server=/consul/127.0.0.1#8600" |sudo tee /etc/dnsmasq.d/nomad
@@ -525,7 +443,7 @@ function setup-misc() {
 function setup-daemons() {
   # get services ready to go
   sudo systemctl daemon-reload
-  sudo systemctl enable  $CONSUL  $NOMAD  $VAULT
+  sudo systemctl enable  consul  nomad
 }
 
 
@@ -556,18 +474,13 @@ function setup-certs() {
   sudo chmod 400 ${KEY}
 
 
-  # :( it setup self-signed key but for dns name `Vault` - which won't resolve w/o Consul Connect
-  # Replace it w/ a wildcard domain file pair; and make it avail to nomad as well
-  [ $VAULT ]  &&  sudo ls -l /opt/vault/tls/tls.crt  /opt/vault/tls/tls.key
+  sudo mkdir -m 500 -p      /opt/nomad/tls
+  sudo cp $CRT              /opt/nomad/tls/tls.crt
+  sudo cp $KEY              /opt/nomad/tls/tls.key
+  sudo chown -R nomad.nomad /opt/nomad/tls  ||  echo 'future pass will work'
+  sudo chmod -R go-rwx      /opt/nomad/tls
 
-  for NOVA in $NOMAD $VAULT; do
-    sudo mkdir -m 500 -p      /opt/$NOVA/tls
-    sudo cp $CRT              /opt/$NOVA/tls/tls.crt
-    sudo cp $KEY              /opt/$NOVA/tls/tls.key
-    sudo chown -R $NOVA.$NOVA /opt/$NOVA/tls
-    sudo chmod -R go-rwx      /opt/$NOVA/tls
-  done
 }
 
 
-runner "$@"
+main "$@"
