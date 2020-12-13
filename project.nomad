@@ -25,25 +25,25 @@ job "[[.NOMAD__SLUG]]" {
 
       [[ if .NOMAD__PORT2_NAME ]]
       port "[[.NOMAD__PORT2_NAME]]" {
-        static = [[.NOMAD__PORT2]]
+        to = [[.NOMAD__PORT2]]
       }
       [[ end ]]
 
       [[ if .NOMAD__PORT3_NAME ]]
       port "[[.NOMAD__PORT3_NAME]]" {
-        static = [[.NOMAD__PORT3]]
+        to = [[.NOMAD__PORT3]]
       }
       [[ end ]]
 
       [[ if .NOMAD__PG ]]
       port  "db" {
-        static = 5432
+        to = 5432
       }
       [[ end ]]
 
       [[ if .NOMAD__MYSQL ]]
       port  "dbmy" {
-        static = 3306
+        to = 3306
       }
       [[ end ]]
     } # end network

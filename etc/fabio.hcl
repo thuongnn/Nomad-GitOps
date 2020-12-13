@@ -33,30 +33,10 @@ job "fabio" {
       port "ui" {
         static = 9998
       }
-
-      port "timemachine" {
-        static = 8012
-      }
-
-      port "ipfs" {
-        static = 4245
-      }
-
-      port "webtorrent_seeder" {
-        static = 6881
-      }
-
-      port "webtorrent_tracker" {
-        static = 6969
-      }
-
-      port "wolk" {
-        static = 99
-      }
     }
   }
 
-  // when 2+ nodes, can constrain to LB node...
+  // when 2+ nodes, can constrain to "lb" nodes only...
   constraint {
      attribute    = "${meta.kind}"
      set_contains = "lb"
