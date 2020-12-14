@@ -1,9 +1,5 @@
 #!/bin/zsh -e
 
-function xxx() {
-  CERTS=home:/opt/.petabox/us.archive.org; env NFSHOME=1 ~/dev/nomad/setup.sh  ${CERTS?}.combined.crt  ${CERTS}.nopassword.key  kube-a-08
-}
-
 # One time setup of server(s) to make a nomad cluster.
 #
 # Assumes you are creating cluster with debian/ubuntu VMs/baremetals,
@@ -199,7 +195,7 @@ function customize2() {
 }
 
 
-function finish() { # xxx
+function finish() {
   echo "Setup GitLab runner in your cluster?\n"
   echo "Enter 'yes' now to set up a GitLab runner in your cluster"
   read cont
@@ -342,7 +338,7 @@ client {
   local KIND='worker'
   [ ${COUNT?} -le ${LB_COUNT?} ]  &&  KIND="$KIND,lb"
   [ ${COUNT?} -eq 0 ]             &&  KIND="$KIND,pv"
-  [ ${COUNT?} -gt 0 ]             &&  KIND="$KIND,xxx"
+
   echo '
   meta {
     "kind" = "'$KIND'"
