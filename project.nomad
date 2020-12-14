@@ -259,7 +259,7 @@ job "[[.NOMAD__SLUG]]" {
 
       template {
         data = <<EOH
-POSTGRESQL_PASSWORD={{ file "/kv/DB_PW" }}
+POSTGRESQL_PASSWORD={{ file "/kv/[[.NOMAD__SLUG]]/DB_PW" }}
 EOH
         destination = "secrets/file.env"
         env         = true
@@ -322,8 +322,8 @@ EOH
 
       template {
         data = <<EOH
-MARIADB_PASSWORD={{ file "/kv/DB_PW" }}
-WORDPRESS_DATABASE_PASSWORD={{ file "/kv/DB_PW" }}
+MARIADB_PASSWORD={{ file "/kv/[[.NOMAD__SLUG]]/DB_PW" }}
+WORDPRESS_DATABASE_PASSWORD={{ file "/kv/[[.NOMAD__SLUG]]/DB_PW" }}
 EOH
         destination = "secrets/file.env"
         env         = true
