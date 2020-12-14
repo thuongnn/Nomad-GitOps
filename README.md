@@ -9,7 +9,6 @@ This also contains demo "hi world" webapp.
 Uses:
 - [nomad](https://www.nomadproject.io) **deployment** (management, scheduling)
 - [consul](https://www.consul.io) **networking** (service mesh, service discovery, envoy, secrets storage & replication)
-- [vault](https://vaultproject.io) **security** (secrets)
 - [fabio](https://fabiolb.net) **routing** (load balancing)
 
 ![Architecture](overview2.drawio.svg)
@@ -65,7 +64,6 @@ NOMAD__PV
 NOMAD__PV_DB
 NOMAD__PV_DB_DEST
 NOMAD__PV_DEST
-NOMAD__VAULT
 ```
 - Our customizations always prefix with `NOMAD__` (note the _two_ `_` chars - to avoid confusion with or tangling with nomad system variables that prefix with one `_` char (eg: `NOMAD_ADDR`)).
 - You can simply insert them, with values, in your project's `.gitlab-ci.yml` file before including _our_ `.gitlab-ci.yml` like above.  Example:
@@ -118,7 +116,6 @@ variables:
 - https://medium.com/@trevor00/building-container-platforms-part-one-introduction-4ee2338eb11
 
 ### future considerations?
-- https://learn.hashicorp.com/tutorials/vault/autounseal-transit?in=vault/auto-unseal
 - https://github.com/hashicorp/consul-esm  (external service monitoring for Consul)
 - https://github.com/timperrett/hashpi (🍓raspberry PI mini cluster 😊)
 
@@ -132,7 +129,6 @@ variables:
 - [setup.sh](setup.sh)
 - you can customize the install with these environment variables:
   - `NFSHOME=1` - setup some minor config to support a r/w `/home/` and r/o `/home/`
-  - `VAULT=` - set like this to skip vault (if you don't have secrets, etc.)
 
 
 ## archive.org minimum requirements for CI/CD:
@@ -202,18 +198,16 @@ wget -qO- 'http://127.0.0.1:8500/v1/catalog/services' |jq .
 Requirements:
 - set environment variables in your `.gitlab-ci.yml`:
   - `NOMAD__PG`
-  - `NOMAD__VAULT`
   - `NOMAD__PV_DB`
   - `NOMAD__PV_DB_DEST`
-- insert `DB_PW` key into the Vault with a value for your project.
-  (See the `vault { .. }` stanza in [project.nomad](project.nomad) for details/examples).
+- Insert `DB_PW` value into `/kv/[NOMAD__SLUG]/DB_PW` on your nomad hosts
 - install `jq` package via your `Dockerfile`
 - Your main/webapp container can slip this in to it's `Dockerfile`'s `CMD` line to setup DB access.
   NOTE: The sleep should ensure `/alloc/data/*-db.ip` file gets created by DB Task 1st healthcheck
   which the webapp Task (above) can read.
 ```bash
 sleep 10  &&  \
-DB_PW=$(echo "$NOMAP" |jq -r .DB_PW)  &&  \
+DB_PW=$(cat /kv/DB_PW)  &&  \
 echo DATABASE_URL=postgres://postgres:${DB_PW}@$(cat /alloc/data/*-db.ip):5432/production >| .env && \
 ```
 
@@ -225,9 +219,7 @@ Requirements:
   - `NOMAD__PV_DEST`
   - `NOMAD__PV_DB`
   - `NOMAD__PV_DB_DEST`
-  - `NOMAD__VAULT`
-- insert `DB_PW` key into the Vault with a value for your project.
-  (See the `vault { .. }` stanza in [project.nomad](project.nomad) for details/examples).
+- Insert `DB_PW` value into `/kv/[NOMAD__SLUG]/DB_PW` on your nomad hosts
 - Your main/webapp container can slip this in to it's `Dockerfile`'s `CMD` line to setup DB access.
   NOTE: The sleep should ensure `/alloc/data/*-db.ip` file gets created by DB Task 1st healthcheck
   which the webapp Task (above) can read.

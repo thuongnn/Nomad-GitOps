@@ -23,7 +23,7 @@ umount $(df -h |fgrep /var/lib/nomad |rev |cut -f1 -d' ' |rev)  ||  echo 'seems 
 
 
 set +e
-for i in  nomad  vault  consul  docker  fabio  docker-ce; do
+for i in  nomad  consul  docker  fabio  docker-ce; do
   service $i stop
   apt-get -yqq purge $i
   systemctl disable $i.service

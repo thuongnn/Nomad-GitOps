@@ -172,40 +172,6 @@ job "[[.NOMAD__SLUG]]" {
 
 
 
-      [[ if .NOMAD__VAULT ]]
-      # Secrets - using Vault
-      # To enable usage, set CI environment variable 'NOMAD__VAULT' in your '.gitlab-ci.yml', eg:
-      #   variables:
-      #     NOMAD__VAULT: 'true'
-      #
-      # You will _also_ have to enter data into your vault _first_ separately.
-      # Some commnd line examples on how to write secrets into the vault.
-      # Substitute "my-service" below for the name of your service (eg: "www-nomad")
-      /*
-        SVC=my-service
-        export VAULT_ADDR=$(echo $NOMAD_ADDR |sed s/4646/8200/)
-        export VAULT_TOKEN=$(sudo grep token /etc/nomad/server.hcl |cut -f2- -d= |tr -d '" ')
-        echo 'path "kv/data/'$SVC'" { capabilities = ["read"] }' | vault policy write read-$SVC -
-        vault policy read read-$SVC
-
-        vault kv put    kv/$SVC  key1=val1
-        vault kv patch  kv/$SVC  key2=val2
-        vault kv get  --field=key1  kv/$SVC
-        vault kv get  -output-curl-string  --field=key2 kv/$SVC
-      */
-      # https://www.vaultproject.io/docs/secrets/kv/kv-v2#acl-rules
-      # https://www.linode.com/docs/applications/configuration-management/use-hashicorp-vault-for-secret-management/
-      #
-      # Writes to '/secrets/file.env' inside container
-      # Sets $NOMAP environment variable in containers (a JSON-encoded hashmap of your keys/vals)
-      vault { policies = [ "read-[[.CI_PROJECT_PATH_SLUG]]" ] }
-      template {
-        data = "NOMAP='{{with secret \"kv/data/[[.CI_PROJECT_PATH_SLUG]]\"}}{{.Data.data | toJSON}}{{end}}'"
-        destination = "secrets/file.env"
-        env         = true
-      }
-      [[ end ]]
-
       [[ if .NOMAD__HOME_RO ]]
       volume_mount {
         volume      = "home-ro"
@@ -273,6 +239,12 @@ job "[[.NOMAD__SLUG]]" {
     [[ end ]]
 
 
+    [[ if .NOMAD__JOB_GROUP ]]
+      # arbitrary config a .gitlab-ci.yml can specify
+      [[.NOMAD__JOB_GROUP]]
+    [[ end ]]
+
+
     [[ if .NOMAD__PG ]]
     # Optional add-on postgres DB.  @see README.md for more details to enable.
     task "[[.NOMAD__SLUG]]-db" {
@@ -285,9 +257,10 @@ job "[[.NOMAD__SLUG]]" {
         }
       }
 
-      vault { policies = [ "read-[[.CI_PROJECT_PATH_SLUG]]" ] }
       template {
-        data = "POSTGRESQL_PASSWORD={{with secret \"kv/data/[[.CI_PROJECT_PATH_SLUG]]\"}}{{.Data.data.DB_PW | toJSON}}{{end}}"
+        data = <<EOH
+POSTGRESQL_PASSWORD={{ file "/kv/DB_PW" }}
+EOH
         destination = "secrets/file.env"
         env         = true
       }
@@ -334,12 +307,6 @@ job "[[.NOMAD__SLUG]]" {
     [[ end ]]
 
 
-    [[ if .NOMAD__JOB_GROUP ]]
-      # arbitrary config a .gitlab-ci.yml can specify
-      [[.NOMAD__JOB_GROUP]]
-    [[ end ]]
-
-
     [[ if .NOMAD__MYSQL ]]
     # Optional add-on mysql/maria DB.  @see README.md for more details to enable.
     #   https://github.com/bitnami/bitnami-docker-wordpress
@@ -353,11 +320,10 @@ job "[[.NOMAD__SLUG]]" {
         }
       }
 
-      vault { policies = [ "read-[[.CI_PROJECT_PATH_SLUG]]" ] }
       template {
         data = <<EOH
-MARIADB_PASSWORD={{with secret "kv/data/[[.CI_PROJECT_PATH_SLUG]]"}}{{.Data.data.DB_PW | toJSON}}{{end}}
-WORDPRESS_DATABASE_PASSWORD={{with secret "kv/data/[[.CI_PROJECT_PATH_SLUG]]"}}{{.Data.data.DB_PW | toJSON}}{{end}}
+MARIADB_PASSWORD={{ file "/kv/DB_PW" }}
+WORDPRESS_DATABASE_PASSWORD={{ file "/kv/DB_PW" }}
 EOH
         destination = "secrets/file.env"
         env         = true
