@@ -221,11 +221,3 @@ function nom-tunnel() {
   local HOST=$(echo "$NOMAD_ADDR" | sed 's/:4646\/*$//' |sed 's/^https*:\/\///')
   ssh -fNA -L 8500:$HOST:8500 -L 9998:$HOST:9998 $HOST
 }
-
-
-function nom-tail() {
-  # tail -f the most recent nomad log (for admins ssh-ed into a nomad cluster VM)
-  SVR=nomad
-  [ $# -eq 1 ]  &&  SVR=consul
-  sudo tail -n1000 -f $(ls /var/log/${SVR}* |tail -1)
-}
