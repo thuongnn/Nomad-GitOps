@@ -73,6 +73,8 @@ saddr $CLUSTER proto tcp dport 20000:45000 ACCEPT;
 ' |sudo tee $FI
 
 set -x
+sudo mkdir -p /etc/ferm/output
+sudo mkdir -p /etc/ferm/forward
 sudo cp -p $FI /etc/ferm/output/nomad.conf
 sudo cp -p $FI /etc/ferm/forward/nomad.conf
 sudo service ferm reload

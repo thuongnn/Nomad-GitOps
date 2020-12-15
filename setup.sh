@@ -171,7 +171,7 @@ function customize2() {
 
 
 
-  [ ${COUNT?} -le ${LB_COUNT?} ]  &&  nomad run ${MYDIR?}/etc/fabio.hcl
+  [ ${COUNT?} -lt ${LB_COUNT?} ]  &&  nomad run ${MYDIR?}/etc/fabio.hcl
 
   # NOTE: if you see failures join-ing and messages like:
   #   "No installed keys could decrypt the message"
@@ -277,7 +277,7 @@ function configure-nomad() {
 
   set +x
 
-  [ $COUNT -lt ${NOMAD_COUNT?} ]  &&  echo '
+  echo '
 name = "'$(hostname -s)'"
 
 server {
@@ -336,7 +336,7 @@ client {
   # Let's put the loadbalancer on the first two nodes added to cluster.
   # All jobs requiring a PV get put on first node in cluster.
   local KIND='worker'
-  [ ${COUNT?} -le ${LB_COUNT?} ]  &&  KIND="$KIND,lb"
+  [ ${COUNT?} -lt ${LB_COUNT?} ]  &&  KIND="$KIND,lb"
   [ ${COUNT?} -eq 0 ]             &&  KIND="$KIND,pv"
 
   echo '
@@ -434,11 +434,9 @@ function setup-certs() {
   local CRT=/etc/fabio/ssl/${DOMAIN?}-cert.pem
   local KEY=/etc/fabio/ssl/${DOMAIN?}-key.pem
 
-  sudo bash -c "(
-    mkdir -p /etc/fabio/ssl/
-    chown root:root /etc/fabio/ssl/
-    cp ${MYDIR?}/etc/fabio.properties /etc/fabio/
-  )"
+  sudo mkdir -p /etc/fabio/ssl/
+  sudo chown root:root /etc/fabio/ssl/
+  cat ${MYDIR?}/etc/fabio.properties |sudo tee /etc/fabio/fabio.properties
 
   [ $TLS_CRT ]  &&  sudo bash -c "(
     rsync -Pav ${TLS_CRT?} ${CRT?}
