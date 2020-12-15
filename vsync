@@ -7,17 +7,10 @@ mydir=${0:a:h}
 
 source $mydir/aliases
 
-# since we have deployments in _both_ kubernetes and nomad clustes right now,
-# figure out which cluster we're hot-syncing the file to.
-
 # fish out file name from what VSCode 'sync-rsync' package sends us -- should be 2nd to last arg
 # switch dirs to make aliases work
 FILE=$(echo "$@" |rev |tr -s ' ' |cut -f2 -d' ' |rev)
 DIR=$(dirname "$FILE")
 cd "$DIR"
 
-# right now, at archive.org, just petabox deploys to kubernetes..
-PROJECT=$(git rev-parse --absolute-git-dir |egrep --color -o '.*?.git' |rev |cut -f2 -d/ |rev)
-
-[ "$PROJECT" = "petabox" ]  &&  $HOME/kre8/branch-sync-edit.sh  "$@"
-[ "$PROJECT" = "petabox" ]  ||  nom-cp "$@"
+nom-cp "$@"
