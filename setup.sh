@@ -12,6 +12,15 @@
 #      (in case you want to use multiple IP addresses for deployments in case one LB/node is out)
 #   Optionally installs gitlab runner on 1st node
 #   Sets up Persistent Volume subdirs on 1st node - deployments needing PV only schedule to this node
+#
+# NOTE: if setup 3 nodes (h0, h1 & h2) on day 1; and want to add 2 more (h3 & h4) later,
+# you can manually run the lines from `config`, then `add-nodes`
+# where you set environment variables like this:
+#   NODES=(h3 h4)
+#   MYDIR=[set to wherever your nomad clone lives]
+#   FIRST=[fully qualified DNS name of your first node]
+#   CLUSTER_SIZE=2
+#   INITIAL_CLUSTER_SIZE=2
 
 MYDIR=${0:a:h}
 
@@ -27,7 +36,7 @@ Run this script on FIRST node in your cluster, while ssh-ed in.
 
 If invoking cmd-line has env var NFSHOME=1 then we'll setup /home/ r/o and r/w mounts.
 
-To simplify, we'll reuse TLS certs, settingup ACL and TLS for nomad.
+To simplify, we'll reuse TLS certs, setting up ACL and TLS for nomad.
 
 "  &&  exit 1
 
@@ -53,6 +62,7 @@ function main() {
     TLS_CRT=$1  # @see create-https-certs.sh - fully qualified path to crt file it created
     TLS_KEY=$2  # @see create-https-certs.sh - fully qualified path to key file it created
     shift
+    INITIAL_CLUSTER_SIZE=0
     CLUSTER_SIZE=$#
     shift
     typeset -a $NODES
@@ -64,32 +74,7 @@ function main() {
     # use the TLS_CRT and TLS_KEY params
     ( COUNT=0 setup-certs )
 
-    # install & setup stock nomad & consul
-    COUNT=0
-    for NODE in $NODES; do
-      ( set -x; ssh $NODE env NFSHOME=$NFSHOME $MYDIR/setup.sh baseline ${FIRST?} ${COUNT?} ${CLUSTER_SIZE?} )
-      let "COUNT=$COUNT+1"
-    done
-
-    # customize nomad & consul
-    # we have to make _all_ nomad servers VERY angry first, before we can get a leader and token
-    COUNT=0
-    for NODE in $NODES; do
-      ( set -x; ssh $NODE env NFSHOME=$NFSHOME $MYDIR/setup.sh customize ${FIRST?} ${COUNT?} ${CLUSTER_SIZE?} )
-      let "COUNT=$COUNT+1"
-    done
-
-    # 🤦‍♀️ now we can finally get them to cluster up, elect a leader, and do their f***ing job
-    COUNT=0
-    for NODE in $NODES; do
-      ( set -x; ssh $NODE env NFSHOME=$NFSHOME $MYDIR/setup.sh customize2 ${FIRST?} ${COUNT?} ${CLUSTER_SIZE?} )
-      let "COUNT=$COUNT+1"
-    done
-
-    # ugh, facepalm
-    for NODE in $NODES; do
-      ssh $NODE 'sudo rm /opt/consul/serf/local.keyring;  sudo service consul restart;  echo'
-    done
+    add-nodes
 
     finish
     exit 0
@@ -107,7 +92,6 @@ function config() {
   # We will put LB/fabio on first two servers
   export LB_COUNT=2
 
-
   export  NOMAD_ADDR="https://${FIRST?}:4646"
   export CONSUL_ADDR="http://localhost:8500"
   export  FABIO_ADDR="http://localhost:9998"
@@ -117,6 +101,36 @@ function config() {
   # find daemon config files
    NOMAD_HCL=$(dpkg -L nomad  2>/dev/null |egrep ^/etc/ |egrep -m1 '\.hcl$' || echo -n '')
   CONSUL_HCL=$(dpkg -L consul 2>/dev/null |egrep ^/etc/ |egrep -m1 '\.hcl$' || echo -n '')
+}
+
+
+function add-nodes() {
+  # install & setup stock nomad & consul
+  COUNT=${INITIAL_CLUSTER_SIZE?}
+  for NODE in ${NODES?}; do
+    ( set -x; ssh $NODE env NFSHOME=$NFSHOME ${MYDIR?}/setup.sh baseline ${FIRST?} ${COUNT?} ${CLUSTER_SIZE?} )
+    let "COUNT=$COUNT+1"
+  done
+
+  # customize nomad & consul
+  # we have to make _all_ nomad servers VERY angry first, before we can get a leader and token
+  COUNT=${INITIAL_CLUSTER_SIZE?}
+  for NODE in ${NODES?}; do
+    ( set -x; ssh $NODE env NFSHOME=$NFSHOME ${MYDIR?}/setup.sh customize ${FIRST?} ${COUNT?} ${CLUSTER_SIZE?} )
+    let "COUNT=$COUNT+1"
+  done
+
+  # 🤦‍♀️ now we can finally get them to cluster up, elect a leader, and do their f***ing job
+  COUNT=${INITIAL_CLUSTER_SIZE?}
+  for NODE in ${NODES?}; do
+    ( set -x; ssh $NODE env NFSHOME=$NFSHOME ${MYDIR?}/setup.sh customize2 ${FIRST?} ${COUNT?} ${CLUSTER_SIZE?} )
+    let "COUNT=$COUNT+1"
+  done
+
+  # ugh, facepalm
+  for NODE in ${NODES?}; do
+    ssh $NODE 'sudo rm /opt/consul/serf/local.keyring;  sudo service consul restart;  echo'
+  done
 }
 
 
