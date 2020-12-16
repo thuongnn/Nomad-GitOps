@@ -188,12 +188,17 @@ function nom() {
 
 
 function nom-job-from-cwd() {
-  # parse out repo info, eg: 'ia' and 'petabox'
-  local GROUP_PROJECT=$(git config --get remote.origin.url |rev |cut -f1 -d: |rev |perl -pe 's/\.git//' |tr A-Z a-z |tr / -)
-  local PROJECT=$(git rev-parse --absolute-git-dir |egrep --color -o '.*?.git' |rev |cut -f2 -d/ |rev)
-  local BRANCH=$(git rev-parse --abbrev-ref HEAD)
-	local SLUG=$(echo "$BRANCH" |tr '/_.' '-' |tr A-Z a-z)
-  local JOB=$GROUP_PROJECT
+  # parse out repo info, eg: 'ia-petabox' -- ensure clone-over-ssh or clone-over-https work
+  local GURL TMP GROUP_PROJECT PROJECT BRANCH SLUG JOB
+  GURL=$(git config --get remote.origin.url)
+  [[ "$GURL" =~ https:// ]]  &&  TMP=$(echo "$GURL" |cut -f4- -d/)
+  [[ "$GURL" =~ https:// ]]  ||  TMP=$(echo "$GURL" |rev |cut -f1 -d: |rev)
+  GROUP_PROJECT=$(echo "$TMP" |perl -pe 's/\.git//' |tr A-Z a-z |tr / -)
+
+  PROJECT=$(git rev-parse --absolute-git-dir |egrep --color -o '.*?.git' |rev |cut -f2 -d/ |rev)
+  BRANCH=$(git rev-parse --abbrev-ref HEAD)
+	SLUG=$(echo "$BRANCH" |tr '/_.' '-' |tr A-Z a-z)
+  JOB=$GROUP_PROJECT
   [ "$SLUG" = "master" ]  ||  JOB="${JOB}-${SLUG}"
   echo $(echo "$JOB" |cut -b1-63)
 }
