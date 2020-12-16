@@ -142,7 +142,7 @@ function nom-urls() {
   # Ideally, this is a faster single-shot call.  But to avoid requiring either `consul` addr
   # and ACL token _in addition_ to `nomad` - we'll just use `nomad` directly instead.
   #   consul catalog services -tags
-  for JOB in $(wget -qO- --header "X-Nomad-Token: ${NOMAD_TOKEN?}" ${NOMAD_ADDR?}/v1/jobs \
+  for JOB in $(curl -sH "X-Nomad-Token: ${NOMAD_TOKEN?}" ${NOMAD_ADDR?}/v1/jobs \
     | jq -r '.[] | select(.Type=="service") | "\(.Name)"')
   do
     _nom-url
@@ -153,7 +153,7 @@ function nom-urls() {
 
 function _nom-url() {
   # logically private helper function
-  URL=$(wget -qO- --header "X-Nomad-Token: ${NOMAD_TOKEN?}" ${NOMAD_ADDR?}/v1/job/$JOB \
+  URL=$(curl -sH "X-Nomad-Token: ${NOMAD_TOKEN?}" ${NOMAD_ADDR?}/v1/job/$JOB \
     | jq -r '.TaskGroups[0].Services[0].Tags' \
     | fgrep :443 |tr -d '", ' |perl -pe 's/:443//; s=^urlprefix\-=https://='
   )
