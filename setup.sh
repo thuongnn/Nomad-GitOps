@@ -89,8 +89,8 @@ function config() {
   export CONSUL_COUNT=${CLUSTER_SIZE?}
 
   # We will put PV on 1st server
-  # We will put LB/fabio on first two servers
-  export LB_COUNT=2
+  # We will put LB/fabio on first X servers
+  export LB_COUNT=${CLUSTER_SIZE?}
 
   export  NOMAD_ADDR="https://${FIRST?}:4646"
   export CONSUL_ADDR="http://localhost:8500"
@@ -185,8 +185,6 @@ function customize2() {
 
 
 
-  [ ${COUNT?} -lt ${LB_COUNT?} ]  &&  nomad run ${MYDIR?}/etc/fabio.hcl
-
   # NOTE: if you see failures join-ing and messages like:
   #   "No installed keys could decrypt the message"
   # try either (depending on nomad or consul) inspecting all nodes' contents of file) and:
@@ -210,6 +208,9 @@ function customize2() {
 
 
 function finish() {
+  nomad run ${MYDIR?}/etc/fabio.hcl
+
+
   echo "Setup GitLab runner in your cluster?\n"
   echo "Enter 'yes' now to set up a GitLab runner in your cluster"
   read cont
