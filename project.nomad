@@ -160,8 +160,9 @@ job "[[.NOMAD__SLUG]]" {
       }
 
       resources {
-        memory = [[ or (.NOMAD__MEMORY) 300 ]]  # defaults to 300MB
-        cpu    = [[ or (.NOMAD__CPU)    100 ]]  # defaults to 100 MHz
+        memory_hard_limit = [[ multiply 10 or (.NOMAD__MEMORY) 300 ]]
+        memory = [[ or (.NOMAD__MEMORY) 300 ]]  # default 300MB - now soft limit since hard active
+        cpu    = [[ or (.NOMAD__CPU)    100 ]]  # default 100 MHz
       }
 
 
