@@ -157,17 +157,18 @@ job "[[.NOMAD__SLUG]]" {
         volumes = [
           "/kv/[[.NOMAD__SLUG]]:/kv"
         ]
+
+        # The resources.memory (just after this) now becomes a **soft limit**
+        # We will 10x that for a **hard limit**
+        [[ if .NOMAD_MEMORY ]]
+          memory_hard_limit = [[ multiply 10 .NOMAD__MEMORY ]]
+        [[ else ]]
+          memory_hard_limit = 3000
+        [[ end ]]
       }
 
       resources {
-          # default 300MB as soft limit - and 10x that for hard limit
-        [[ if .NOMAD_MEMORY ]]
-          memory_hard_limit = [[ multiply 10 .NOMAD__MEMORY ]]
-          memory = [[ .NOMAD__MEMORY ]]
-        [[ else ]]
-          memory_hard_limit = 3000
-          memory = 300
-        [[ end ]]
+        memory = [[ or (.NOMAD__MEMORY) 300 ]]  # default 300 MB - but look just above
         cpu    = [[ or (.NOMAD__CPU)    100 ]]  # default 100 MHz
       }
 
