@@ -161,7 +161,7 @@ job "[[.NOMAD__SLUG]]" {
         # The resources.memory (just after this) now becomes a **soft limit**
         # We will 10x that for a **hard limit**
         [[ if .NOMAD__MEMORY ]]
-          memory_hard_limit = [[ multiply 10 .NOMAD__MEMORY ]]
+          memory_hard_limit = 3000 # xxx not working [[ multiply 10 .NOMAD__MEMORY ]]
         [[ else ]]
           memory_hard_limit = 3000
         [[ end ]]
