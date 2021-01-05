@@ -95,7 +95,7 @@ function nom-cp() {
 
   [ "$BRANCH" = "master" ]  &&  [ $VSCODE ]  &&  ( set -x; rsync "$@" )  &&  exit 0
 
-  [ "$JOB" = "" ]  &&  (
+  [ "$JOB" = ""  -o  "$ALLOC" = "" ]  &&  (
     echo 'has this branch run a full pipeline and deployed a Review App yet?'
     exit 1 # no relevant job & alloc found - nothing to do
   )
@@ -188,6 +188,7 @@ function nom() {
 
 
 function nom-job-from-cwd() {
+  # print the nomad job name based on the current project
   # parse out repo info, eg: 'ia-petabox' -- ensure clone-over-ssh or clone-over-https work
   local GURL TMP GROUP_PROJECT PROJECT BRANCH SLUG JOB
   GURL=$(git config --get remote.origin.url)
@@ -202,6 +203,23 @@ function nom-job-from-cwd() {
   [ "$SLUG" = "master" ]  ||  JOB="${JOB}-${SLUG}"
   echo $(echo "$JOB" |cut -b1-63)
 }
+
+
+
+function nom-image-from-cwd() {
+  # print the registry image based on the current project
+  # parse out repo info, eg: 'ia-petabox' -- ensure clone-over-ssh or clone-over-https work
+  local GURL GROUP_PROJECT BRANCH SLUG JOB
+  GURL=$(git config --get remote.origin.url)
+  [[ "$GURL" =~ https:// ]]  &&  GROUP_PROJECT=$(echo "$GURL" |cut -f4- -d/)
+  [[ "$GURL" =~ https:// ]]  ||  GROUP_PROJECT=$(echo "$GURL" |rev |cut -f1 -d: |rev)
+
+  BRANCH=$(git rev-parse --abbrev-ref HEAD)
+	SLUG=$(echo "$BRANCH" |tr '/_.' '-' |tr A-Z a-z)
+  echo $(echo "registry.archive.org/$GROUP_PROJECT/$SLUG" |cut -b1-63)
+}
+
+
 
 
 function nom-job-to-alloc() {

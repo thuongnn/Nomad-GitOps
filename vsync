@@ -13,4 +13,4 @@ FILE=$(echo "$@" |rev |tr -s ' ' |cut -f2 -d' ' |rev)
 DIR=$(dirname "$FILE")
 cd "$DIR"
 
-nom-cp "$@"
+nom-cp "$@"  ||  rsync "$@"
