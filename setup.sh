@@ -208,6 +208,7 @@ function customize2() {
 
 
 function finish() {
+  sleep 30
   nomad run ${MYDIR?}/etc/fabio.hcl
 
 
