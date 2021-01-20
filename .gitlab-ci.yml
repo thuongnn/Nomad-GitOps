@@ -47,12 +47,14 @@ deploy:
     # this fully parameterized nice generic 'house style' project
     - if [ ! -e project.nomad ];then wget -q https://gitlab.com/internetarchive/nomad/-/raw/master/project.nomad; fi
 
+    - echo using nomad cluster $NOMAD_ADDR
+    - echo deploying to https://$NOMAD__HOSTNAME
+
     # Swap out any env vars in `project.nomad` with environment values
     - node -e 'console.log(JSON.stringify(process.env))' >| /tmp/env.json
-    - levant render -var-file=/tmp/env.json  project.nomad 2>/dev/null >| project.hcl
+    - levant render -var-file=/tmp/env.json  project.nomad 2>/dev/null >| project.hcl  ||  cat /tmp/env.json
     - rm /tmp/env.json
 
-    - echo deploying to https://$NOMAD__HOSTNAME
     - grep -vi password project.hcl | egrep -v '^\s*$'
     - nomad validate    project.hcl
     - nomad plan        project.hcl 2>&1 |sed 's/\(password[^ \t]*[ \t]*\).*/\1 ... /' || echo
