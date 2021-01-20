@@ -52,7 +52,7 @@ deploy:
 
     # Swap out any env vars in `project.nomad` with environment values
     - node -e 'console.log(JSON.stringify(process.env))' >| /tmp/env.json
-    - levant render -var-file=/tmp/env.json  project.nomad 2>/dev/null >| project.hcl  ||  cat /tmp/env.json
+    - levant render -var-file=/tmp/env.json  project.nomad 2>/dev/null >| project.hcl
     - rm /tmp/env.json
 
     - grep -vi password project.hcl | egrep -v '^\s*$'
