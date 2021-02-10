@@ -162,6 +162,15 @@ function _nom-url() {
 
 function nom-restart() {
   # restarts a job (NOTE: needs to already be up/responsive and ssh-able)
+
+  echo "
+disabled due to issues - please use the GUI and find your job, then allocation, and [stop] it there (will auto-respawn somewhere else)
+
+  ${NOMAD_ADDR?}
+
+"
+  return
+
   [ $# -eq 1 ]  &&  JOB=$1
   [ $# -ne 1 ]  &&  JOB=$(nom-job-from-cwd)
   nomad alloc stop $(nom-job-to-alloc $JOB)
