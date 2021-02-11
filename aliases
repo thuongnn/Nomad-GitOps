@@ -180,9 +180,15 @@ disabled due to issues - please use the GUI and find your job, then allocation, 
 function d() {
   # show docker running containers and local images
 	[ "$#" = "0" ] && clear
-	sudo docker ps -a
-	line
-	sudo docker images
+  if [ $(uname) = "Darwin" ]; then
+	  docker ps -a
+	  line
+	  docker images
+  else
+	  sudo docker ps -a
+	  line
+	  sudo docker images
+  fi
 }
 
 function nom() {
