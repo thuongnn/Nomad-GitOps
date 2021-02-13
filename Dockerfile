@@ -1,3 +1,6 @@
+# syntax = docker/dockerfile:1.0-experimental
+# https://docs.docker.com/develop/develop-images/build_enhancements/#overriding-default-frontends
+
 FROM node
 
 # Add nomad and levant
