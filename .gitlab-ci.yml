@@ -42,6 +42,7 @@ include:
       export NOMAD_VAR_SLUG=$NOMAD__SLUG
       export NOMAD_VAR_HOSTNAME=$NOMAD__HOSTNAME
       export NOMAD_VAR_HOSTNAMES='["'$NOMAD_VAR_HOSTNAME'"]'
+      echo NOMAD_VAR_HOSTNAMES=$NOMAD_VAR_HOSTNAMES
 
 
 deploy:
