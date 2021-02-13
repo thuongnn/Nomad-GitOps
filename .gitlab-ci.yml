@@ -63,7 +63,7 @@ deploy:
     - if [ $HCL2 ]; then wget -q https://gitlab.com/internetarchive/nomad/-/raw/master/project.hcl; fi
     - sed -i "s/NOMAD_VAR_SLUG/$NOMAD_VAR_SLUG/" job.hcl
     - node -e 'console.log(JSON.stringify(Object.fromEntries(Object.entries(process.env).filter(([k, v]) => k.startsWith("CI_")))))' >| /tmp/env.json
-    - if [ $HCL2 ]; then nomad plan -var-file=/tmp/env.json job.hcl; fi
+    - if [ $HCL2 ]; then nomad plan -var-file=/tmp/env.json project.hcl; fi
 
     - rm /tmp/env.json
 
