@@ -24,7 +24,7 @@ variables {
   HOSTNAMES = ["group-project-branch-slug.example.com", "x.org"] # chexxx & docme
 
   # cant use a port over port 5000 right now
-  PORTS = { 5000 = "http" } // , 666 = "cool-ness", "8" = "ugh" } # chexxx & docme
+  PORTS = { 5000 = "http" } # , 666 = "cool-ness", "8" = "ugh" } # chexxx & docme
 
   # default 300 MB
   MEMORY = 300
@@ -83,8 +83,8 @@ job "NOMAD_VAR_SLUG" {
     }
     network {
       dynamic "port" {
-        // port.key == portnumber
-        // port.value == portname
+        # port.key == portnumber
+        # port.value == portname
         for_each = merge(var.PORTS, var.PG, var.MYSQL)
         labels = [ "${port.value}" ]
         content {
@@ -150,8 +150,8 @@ job "NOMAD_VAR_SLUG" {
     dynamic "service" {
       for_each = local.ports_not_5000
       content {
-        // service.key == portnumber
-        // service.value == portname
+        # service.key == portnumber
+        # service.value == portname
         name = "${var.SLUG}-${service.value}"
         tags = ["urlprefix-${var.HOSTNAMES[0]}:${service.key}/"]
         port = "${service.value}"
@@ -229,8 +229,8 @@ job "NOMAD_VAR_SLUG" {
       }
 
       dynamic "volume_mount" {
-        // volume_mount.key == slot, eg: "/pv3"
-        // volume_mount.value == dest dir, eg: "/pv" or "/bitnami/wordpress"
+        # volume_mount.key == slot, eg: "/pv3"
+        # volume_mount.value == dest dir, eg: "/pv" or "/bitnami/wordpress"
         for_each = merge(var.PV, var.PV_DB)
         content {
           volume      = "${volume_mount.key}"
@@ -261,8 +261,8 @@ job "NOMAD_VAR_SLUG" {
     }
 
     dynamic "volume" {
-      // volume.key == slot, eg: "/pv3"
-      // volume.value == dest dir, eg: "/pv" or "/bitnami/wordpress"
+      # volume.key == slot, eg: "/pv3"
+      # volume.value == dest dir, eg: "/pv" or "/bitnami/wordpress"
       labels = [ volume.key ]
       for_each = merge(var.PV, var.PV_DB)
       content {
@@ -422,22 +422,18 @@ job "NOMAD_VAR_SLUG" {
   }
 
 
-  // [[ if .NOMAD__PV ]]
-  // constraint {
-  //   attribute = "${meta.kind}"
-  //   set_contains = "pv"
-  // }
-  // [[ end ]]
-  // [[ if .NOMAD__PV_DB ]]
-  // constraint {
-  //   attribute = "${meta.kind}"
-  //   set_contains = "pv"
-  // }
-  // [[ end ]]
-
   # This allows us to more easily partition nodes (if desired) to run normal jobs like this (or not)
   constraint {
     attribute = "${meta.kind}"
     set_contains = "worker"
+  }
+
+  dynamic "constraint" {
+    # If either PV or PV_DB is in use, constrain to the single "pv" node in the cluster
+    for_each = slice(keys(merge(var.PV, var.PV_DB)), 0, length(keys(merge(var.PV, var.PV_DB))))
+    content {
+      attribute = "${meta.kind}"
+      set_contains = "pv"
+    }
   }
 } # end job
