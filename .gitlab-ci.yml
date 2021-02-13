@@ -72,7 +72,8 @@ deploy:
     - grep -vi password project.hcl | egrep -v '^\s*$'
     - nomad validate  -hcl1 project.hcl
     - nomad plan      -hcl1 project.hcl 2>&1 |sed 's/\(password[^ \t]*[ \t]*\).*/\1 ... /' || echo
-    - nomad run       -hcl1 project.hcl
+    - if [ $HCL2 ]; then  nomad run project.hcl;  fi
+    - if [ $HCL2 ]; then echo HCL1; else  nomad run -hcl1 project.hcl;  fi
     - echo deployed to https://$NOMAD_VAR_HOSTNAME
 
   environment:
