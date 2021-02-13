@@ -34,6 +34,10 @@ variables {
   CHECK_PROTOCOL = "http"
   HEALTH_TIMEOUT = "20s"
 
+  # How many running containers should you deploy?
+  # https://learn.hashicorp.com/tutorials/nomad/job-rolling-update
+  COUNT = 1
+
   # Pass in "ro" or "rw" if you want an NFS /home/ mounted into container, as ReadOnly or ReadWrite
   HOME = ""
 
@@ -74,6 +78,8 @@ job "NOMAD_VAR_SLUG" {
   datacenters = ["dc1"]
 
   group "NOMAD_VAR_SLUG" {
+    count = var.COUNT
+
     update {
       # https://learn.hashicorp.com/tutorials/nomad/job-rolling-update
       max_parallel  = 1
@@ -278,12 +284,6 @@ job "NOMAD_VAR_SLUG" {
       }
     }
 
-
-
-//     [[ if .NOMAD__JOB_GROUP ]]
-//       # arbitrary config a .gitlab-ci.yml can specify
-//       ${var.JOB_GROUP]]
-//     [[ end ]]
 
 
 //     [[ if .NOMAD__PG ]]
