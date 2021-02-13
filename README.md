@@ -40,36 +40,36 @@ test:
 ### customizing
 There are various options that can be used in conjunction with the `project.nomad` and `.gitlab-ci.yml` files, keys:
 ```text
-NOMAD__CHECK_PROTOCOL
-NOMAD__CPU
-NOMAD__HEALTH_TIMEOUT
-NOMAD__HOME_RO
-NOMAD__HOME_RW
-NOMAD__HOSTNAME
-NOMAD__HOSTNAME2
-NOMAD__HOSTNAME3
-NOMAD__JOB_GROUP
-NOMAD__JOB_TASK
-NOMAD__JOB_TASK_CONFIG
-NOMAD__MEMORY
-NOMAD__MYSQL
-NOMAD__NO_DEPLOY
-NOMAD__PG
-NOMAD__PORT
-NOMAD__PORT2
-NOMAD__PORT2_NAME
-NOMAD__PORT3
-NOMAD__PORT3_NAME
-NOMAD__PV
-NOMAD__PV_DB
-NOMAD__PV_DB_DEST
-NOMAD__PV_DEST
+NOMAD_VAR_CHECK_PROTOCOL
+NOMAD_VAR_CPU
+NOMAD_VAR_HEALTH_TIMEOUT
+NOMAD_VAR_HOME_RO
+NOMAD_VAR_HOME_RW
+NOMAD_VAR_HOSTNAME
+NOMAD_VAR_HOSTNAME2
+NOMAD_VAR_HOSTNAME3
+NOMAD_VAR_JOB_GROUP
+NOMAD_VAR_JOB_TASK
+NOMAD_VAR_JOB_TASK_CONFIG
+NOMAD_VAR_MEMORY
+NOMAD_VAR_MYSQL
+NOMAD_VAR_NO_DEPLOY
+NOMAD_VAR_PG
+NOMAD_VAR_PORT
+NOMAD_VAR_PORT2
+NOMAD_VAR_PORT2_NAME
+NOMAD_VAR_PORT3
+NOMAD_VAR_PORT3_NAME
+NOMAD_VAR_PV
+NOMAD_VAR_PV_DB
+NOMAD_VAR_PV_DB_DEST
+NOMAD_VAR_PV_DEST
 ```
-- Our customizations always prefix with `NOMAD__` (note the _two_ `_` chars - to avoid confusion with or tangling with nomad system variables that prefix with one `_` char (eg: `NOMAD_ADDR`)).
+- Our customizations always prefix with `NOMAD_VAR_` (note the _two_ `_` chars - to avoid confusion with or tangling with nomad system variables that prefix with one `_` char (eg: `NOMAD_ADDR`)).
 - You can simply insert them, with values, in your project's `.gitlab-ci.yml` file before including _our_ `.gitlab-ci.yml` like above.  Example:
 ```yaml
 variables:
-  NOMAD__NO_DEPLOY: 'true'
+  NOMAD_VAR_NO_DEPLOY: 'true'
 ```
 
 
@@ -197,10 +197,10 @@ wget -qO- 'http://127.0.0.1:8500/v1/catalog/services' |jq .
 ### Postgres DB
 Requirements:
 - set environment variables in your `.gitlab-ci.yml`:
-  - `NOMAD__PG`
-  - `NOMAD__PV_DB`
-  - `NOMAD__PV_DB_DEST`
-- Insert `DB_PW` value into `/kv/[NOMAD__SLUG]/DB_PW` on your nomad hosts
+  - `NOMAD_VAR_PG`
+  - `NOMAD_VAR_PV_DB`
+  - `NOMAD_VAR_PV_DB_DEST`
+- Insert `DB_PW` value into `/kv/[NOMAD_VAR_SLUG]/DB_PW` on your nomad hosts
 - install `jq` package via your `Dockerfile`
 - Your main/webapp container can slip this in to it's `Dockerfile`'s `CMD` line to setup DB access.
   NOTE: The sleep should ensure `/alloc/data/*-db.ip` file gets created by DB Task 1st healthcheck
@@ -214,12 +214,12 @@ echo DATABASE_URL=postgres://postgres:${DB_PW}@$(cat /alloc/data/*-db.ip):5432/p
 ### MySQL / mariaDB
 Requirements:
 - set environment variables in your `.gitlab-ci.yml`:
-  - `NOMAD__MYSQL`
-  - `NOMAD__PV`
-  - `NOMAD__PV_DEST`
-  - `NOMAD__PV_DB`
-  - `NOMAD__PV_DB_DEST`
-- Insert `DB_PW` value into `/kv/[NOMAD__SLUG]/DB_PW` on your nomad hosts
+  - `NOMAD_VAR_MYSQL`
+  - `NOMAD_VAR_PV`
+  - `NOMAD_VAR_PV_DEST`
+  - `NOMAD_VAR_PV_DB`
+  - `NOMAD_VAR_PV_DB_DEST`
+- Insert `DB_PW` value into `/kv/[NOMAD_VAR_SLUG]/DB_PW` on your nomad hosts
 - Your main/webapp container can slip this in to it's `Dockerfile`'s `CMD` line to setup DB access.
   NOTE: The sleep should ensure `/alloc/data/*-db.ip` file gets created by DB Task 1st healthcheck
   which the webapp Task (above) can read.
