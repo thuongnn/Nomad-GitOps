@@ -88,7 +88,7 @@ deploy:
     url: https://$NOMAD_VAR_HOSTNAME
     on_stop: stop_review
   rules:
-    - if: '$NOMAD__NO_DEPLOY'
+    - if: '$NOMAD_VAR_NO_DEPLOY || $NOMAD__NO_DEPLOY'
       when: never
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       when: never
@@ -112,7 +112,7 @@ stop_review:
   rules:
     - if: '$CI_COMMIT_BRANCH == "master"'
       when: never
-    - if: '$NOMAD__NO_DEPLOY'
+    - if: '$NOMAD_VAR_NO_DEPLOY || $NOMAD__NO_DEPLOY'
       when: never
     - if: '$CI_COMMIT_TAG || $CI_COMMIT_BRANCH'
       when: manual
