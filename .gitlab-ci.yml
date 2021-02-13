@@ -38,6 +38,9 @@ include:
       DOM=${KUBE_INGRESS_BASE_DOMAIN}
       [ "$NOMAD__HOSTNAME" = "" ]  &&  export NOMAD__HOSTNAME="${NOMAD__SLUG}.${DOM}"
 
+      NOMARGS="-hcl1"
+      [ $HCL2 ]  &&  NOMARGS="-var-file=/tmp/env.json"
+
       # For hcl2
       export NOMAD_VAR_SLUG=$NOMAD__SLUG
       export NOMAD_VAR_HOSTNAME=$NOMAD__HOSTNAME
@@ -49,31 +52,30 @@ deploy:
   extends: .nomad-vars
   stage: deploy
   script:
+    - echo using nomad cluster $NOMAD_ADDR
+    - echo deploying to https://$NOMAD_VAR_HOSTNAME
+
     # You can have your own/custom `project.nomad` in the top of your repo - or we'll just use
     # this fully parameterized nice generic 'house style' project
     - if [ ! -e project.nomad ];then wget -q https://gitlab.com/internetarchive/nomad/-/raw/master/project.nomad; fi
 
-    - echo using nomad cluster $NOMAD_ADDR
-    - echo deploying to https://$NOMAD_VAR_HOSTNAME
-
     # Swap out any env vars in `project.nomad` with environment values
-    - node -e 'console.log(JSON.stringify(process.env))' >| /tmp/env.json
-    - levant render -var-file=/tmp/env.json  project.nomad 2>/dev/null >| project.hcl
+    - if [ ! $HCL2 ]; then node -e 'console.log(JSON.stringify(process.env))' >| /tmp/env.json; fi
+    - if [ ! $HCL2 ]; then levant render -var-file=/tmp/env.json  project.nomad 2>/dev/null >| project.hcl; fi
 
-    # If we're using hcl2, ignore above levant
-    - if [ $HCL2 ]; then rm -f project.hcl; fi
-    - if [ $HCL2 ]; then wget -q https://gitlab.com/internetarchive/nomad/-/raw/master/project.hcl; fi
+    # Swap out any env var overrides to `project.hcl` with environment values
+    - if [ ! -e project.hcl ]; then wget -q https://gitlab.com/internetarchive/nomad/-/raw/master/project.hcl; fi
     - sed -i "s/NOMAD_VAR_SLUG/$NOMAD_VAR_SLUG/" project.hcl
     - node -e 'console.log(JSON.stringify(Object.fromEntries(Object.entries(process.env).filter(([k, v]) => k.startsWith("CI_")))))' >| /tmp/env.json
-    - if [ $HCL2 ]; then nomad plan -var-file=/tmp/env.json project.hcl || echo; fi
+
+    - grep -vi password project.hcl | egrep -v '^\s*$'
+
+    - nomad validate $NOMARGS  project.hcl
+    - nomad plan     $NOMARGS  project.hcl 2>&1 |sed 's/\(password[^ \t]*[ \t]*\).*/\1 ... /' || echo
+    - nomad run      $NOMARGS  project.hcl
 
     - rm /tmp/env.json
 
-    - grep -vi password project.hcl | egrep -v '^\s*$'
-    - nomad validate  -hcl1 project.hcl
-    - nomad plan      -hcl1 project.hcl 2>&1 |sed 's/\(password[^ \t]*[ \t]*\).*/\1 ... /' || echo
-    - if [ $HCL2 ]; then  nomad run project.hcl;  fi
-    - if [ $HCL2 ]; then echo HCL1; else  nomad run -hcl1 project.hcl;  fi
     - echo deployed to https://$NOMAD_VAR_HOSTNAME
 
   environment:
