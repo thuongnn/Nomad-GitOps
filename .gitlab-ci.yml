@@ -38,8 +38,13 @@ include:
       DOM=${KUBE_INGRESS_BASE_DOMAIN}
       [ "$NOMAD__HOSTNAME" = "" ]  &&  export NOMAD__HOSTNAME="${NOMAD__SLUG}.${DOM}"
 
-      NOMARGS="-hcl1"
-      [ $HCL2 ]  &&  NOMARGS="-var-file=/tmp/env.json"
+      # anything still using older NOMAD__VARIABLE_NAME style stick with hcl1 & levant for now
+      HCL1=
+      tmp=$(env |egrep -c ^NOMAD__)
+      [ "$tmp" = "0" ]  &&  HCL1=1
+
+      NOMARGS="-var-file=/tmp/env.json"
+      [ $HCL1 ]  &&  NOMARGS="-hcl1"
 
       # For hcl2
       export NOMAD_VAR_SLUG=$NOMAD__SLUG
@@ -60,8 +65,8 @@ deploy:
     - if [ ! -e project.nomad ];then wget -q https://gitlab.com/internetarchive/nomad/-/raw/master/project.nomad; fi
 
     # Swap out any env vars in `project.nomad` with environment values
-    - if [ ! $HCL2 ]; then node -e 'console.log(JSON.stringify(process.env))' >| /tmp/env.json; fi
-    - if [ ! $HCL2 ]; then levant render -var-file=/tmp/env.json  project.nomad 2>/dev/null >| project.hcl; fi
+    - if [ $HCL1 ]; then node -e 'console.log(JSON.stringify(process.env))' >| /tmp/env.json; fi
+    - if [ $HCL1 ]; then levant render -var-file=/tmp/env.json  project.nomad 2>/dev/null >| project.hcl; fi
 
     # Swap out any env var overrides to `project.hcl` with environment values
     - if [ ! -e project.hcl ]; then wget -q https://gitlab.com/internetarchive/nomad/-/raw/master/project.hcl; fi
