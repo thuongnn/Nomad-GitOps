@@ -60,6 +60,7 @@ deploy:
     - levant render -var-file=/tmp/env.json  project.nomad 2>/dev/null >| project.hcl
 
     # If we're using hcl2, ignore above levant
+    - if [ $HCL2 ]; then rm -f project.hcl; fi
     - if [ $HCL2 ]; then wget -q https://gitlab.com/internetarchive/nomad/-/raw/master/project.hcl; fi
     - sed -i "s/NOMAD_VAR_SLUG/$NOMAD_VAR_SLUG/" project.hcl
     - node -e 'console.log(JSON.stringify(Object.fromEntries(Object.entries(process.env).filter(([k, v]) => k.startsWith("CI_")))))' >| /tmp/env.json
