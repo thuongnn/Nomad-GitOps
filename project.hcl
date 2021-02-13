@@ -190,7 +190,7 @@ job "NOMAD_VAR_SLUG" {
         }
 
 
-        ports = [for portname, portnumber in var.PORTS : portname]
+        ports = [for portnumber, portname in var.PORTS : portname]
 
 
         // [[ if .NOMAD__JOB_TASK_CONFIG ]]
