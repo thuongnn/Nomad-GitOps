@@ -13,14 +13,14 @@ variables {
   CI_R2_PASS = ""                                           # .. to 1st user/pass (see README.md)
 
 
-  # The remaining vars can be set/overriden in a repo via CI/CD variables in repo setting or
-  # repo's `.gitlab-ci.yml` file.
-  # Each CI/CD var name should be prefixed with 'NOMAD_VAR_'.
-
   # This autogenerates from https://gitlab.com/internetarchive/nomad/-/blob/master/.gitlab-ci.yml
+  # You should not change this.
   SLUG = "group-project-branch-slug"
 
-  # The remaining vars are optionals with defaults.
+
+  # The remaining vars can be optionally set/overriden in a repo via CI/CD variables in repo's
+  # setting or repo's `.gitlab-ci.yml` file.
+  # Each CI/CD var name should be prefixed with 'NOMAD_VAR_'.
 
   # Note: cant use a port over port 5000 right now
   PORTS = { 5000 = "http" } # , 666 = "cool-ness", "8" = "ugh" } # chexxx & docme
@@ -34,6 +34,9 @@ variables {
   CHECK_PROTOCOL = "http"
   HEALTH_TIMEOUT = "20s"
 
+  # Pass in "ro" or "rw" if you want an NFS /home/ mounted into container, as ReadOnly or ReadWrite
+  HOME = ""
+
   # Persistent Volume(s).  To enable, coordinate a free slot with your nomad cluster administrator
   # and then set like, for PV slot 3: { pv3 = "/pv" }
   # You can override the dest dir location in container like: { pv3 = "/bitnami/wordpress" }
@@ -45,9 +48,6 @@ variables {
 
   # To setup a mysql DB, set like { 3306 = "dbmy" } - or override port number if desired
   MYSQL = { }
-
-  # Pass in "ro" or "rw" if you want an NFS /home/ mounted into container, as ReadOnly or ReadWrite
-  HOME = ""
 }
 
 variable "HOSTNAMES" {
@@ -185,13 +185,12 @@ job "NOMAD_VAR_SLUG" {
           # the group [Settings] [CI/CD] [Variables] - then use deploy token-based alternatives.
           server_address = "${var.CI_REGISTRY}"
 
+          # Effectively use CI_R2_* variant if set; else use CI_REGISTRY_* PAIR
           username = element([for s in [var.CI_R2_USER, var.CI_REGISTRY_USER] : s if s != ""], 0)
           password = element([for s in [var.CI_R2_PASS, var.CI_REGISTRY_PASSWORD] : s if s != ""], 0)
         }
 
-
         ports = [for portnumber, portname in var.PORTS : portname]
-
 
         // [[ if .NOMAD__JOB_TASK_CONFIG ]]
         //   # arbitrary config a .gitlab-ci.yml can specify
