@@ -17,13 +17,12 @@ variables {
   # repo's `.gitlab-ci.yml` file.
   # Each CI/CD var name should be prefixed with 'NOMAD_VAR_'.
 
-  # this autogenerates from https://gitlab.com/internetarchive/nomad/-/blob/master/.gitlab-ci.yml
+  # This autogenerates from https://gitlab.com/internetarchive/nomad/-/blob/master/.gitlab-ci.yml
   SLUG = "group-project-branch-slug"
 
-  #
-  HOSTNAMES = ["group-project-branch-slug.example.com", "x.org"] # chexxx & docme
+  # The remaining vars are optionals with defaults.
 
-  # cant use a port over port 5000 right now
+  # Note: cant use a port over port 5000 right now
   PORTS = { 5000 = "http" } # , 666 = "cool-ness", "8" = "ugh" } # chexxx & docme
 
   # default 300 MB
@@ -49,6 +48,14 @@ variables {
 
   # Pass in "ro" or "rw" if you want an NFS /home/ mounted into container, as ReadOnly or ReadWrite
   HOME = ""
+}
+
+variable "HOSTNAMES" {
+  # This autogenerates from https://gitlab.com/internetarchive/nomad/-/blob/master/.gitlab-ci.yml
+  # but you can override to 1 or more custom hostnames if desired, eg:
+  #   export NOMAD_VAR_HOSTNAMES=["www.example.com", "site.example.com"]
+  type = list(string)
+  default = ["group-project-branch-slug.example.com"]
 }
 
 
