@@ -64,33 +64,38 @@ variable "HOSTNAMES" {
 # You can override the dest dir location in container like: { pv3 = "/bitnami/wordpress" }
 variable "PV" {
   type = map(any)
-  default = {}
+  default = { "" = "" }
 }
 variable "PV_DB" {
   type = map(any)
-  default = {}
+  default = { "" = "" }
 }
 
 variable "PG" {
   # To setup a postgres DB, set like { 5432 = "db" } - or override port number if desired
   type = map(any)
-  default = {}
+  default = { "" = "" }
 }
 variable "MYSQL" {
   # To setup a mysql DB, set like { 3306 = "dbmy" } - or override port number if desired
   type = map(any)
-  default = {}
+  default = { "" = "" }
 }
 
 
 
 locals {
-  # more convoluted than should be, but remove map key/val for the port 5000
+  # Ignore all this.  really :)
+  # More convoluted than should be, but remove map key/val for the port 5000
   # get numeric sort to work right by 0-padding to 5 digits so that keys() returns like: [x, y, 5000]
   ports_sorted = "${zipmap(formatlist("%05d", keys(var.PORTS)), values(var.PORTS))}"
   ports_not_5000 = "${zipmap(
     formatlist("%d", slice(  keys(local.ports_sorted), 0, length(keys(var.PORTS)) - 1)),
     slice(values(local.ports_sorted), 0, length(keys(var.PORTS)) - 1))}"
+
+  # More convoluted than should be, but need way to merge two (logically) empty maps to an empty map
+  pvs_merged = compact(merge(var.PV, var.PV_DB))
+  pvs = "${zipmap(keys(pvs_merged), values(pvs_merged))}"
 }
 
 
@@ -264,7 +269,7 @@ job "NOMAD_VAR_SLUG" {
       dynamic "volume_mount" {
         # volume_mount.key == slot, eg: "/pv3"
         # volume_mount.value == dest dir, eg: "/pv" or "/bitnami/wordpress"
-        for_each = merge(var.PV, var.PV_DB)
+        for_each = local.pv
         content {
           volume      = "${volume_mount.key}"
           destination = "${volume_mount.value}"
@@ -297,7 +302,7 @@ job "NOMAD_VAR_SLUG" {
       # volume.key == slot, eg: "/pv3"
       # volume.value == dest dir, eg: "/pv" or "/bitnami/wordpress"
       labels = [ volume.key ]
-      for_each = merge(var.PV, var.PV_DB)
+      for_each = local.pv
       content {
         type      = "host"
         read_only = false
@@ -457,7 +462,7 @@ job "NOMAD_VAR_SLUG" {
 
   dynamic "constraint" {
     # If either PV or PV_DB is in use, constrain to the single "pv" node in the cluster
-    for_each = slice(keys(merge(var.PV, var.PV_DB)), 0, length(keys(merge(var.PV, var.PV_DB))))
+    for_each = slice(keys(local.pv), 0, length(keys(local.pv)))
     content {
       attribute = "${meta.kind}"
       set_contains = "pv"
