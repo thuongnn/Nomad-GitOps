@@ -101,7 +101,7 @@ locals {
   PV    = convert(var.PV,    map(string))
   PV_DB = convert(var.PV_DB, map(string))
 
-  pvs = merge(local.PV, local.PV_DB)
+  pvs = merge(convert(local.PV, map(string)), convert(local.PV_DB, map(string)))
 }
 
 
