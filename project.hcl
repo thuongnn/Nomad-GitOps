@@ -74,12 +74,12 @@ variable "PV_DB" {
 variable "PG" {
   # Setup a postgres DB like NOMAD_VAR_DB='{ 5432 = "db" }' - or override port num if desired
   type = map(string)
-  default = { "" = "" }
+  default = {}
 }
 variable "MYSQL" {
   # Setup a mysql DB like NOMAD_VAR_MYSQL='{ 3306 = "dbmy" }' - or override port number if desired
   type = map(string)
-  default = { "" = "" }
+  default = {}
 }
 
 
@@ -94,14 +94,11 @@ locals {
     slice(values(local.ports_sorted), 0, length(keys(var.PORTS)) - 1))}"
 
   # Too convoluted -- but need way to switch (logically) empty maps to actual empty maps
-  PG    = "${zipmap(compact(keys(var.PG)),    compact(values(var.PG)))}"
-  MYSQL = "${zipmap(compact(keys(var.MYSQL)), compact(values(var.MYSQL)))}"
+  PG    = "${zipmap(keys(convert(var.PG,    map(string))), values(convert(var.PG,    map(string))))}"
+  MYSQL = "${zipmap(keys(convert(var.MYSQL, map(string))), values(convert(var.MYSQL, map(string))))}"
 
   # Too convoluted -- but need way to merge two (logically) empty maps to an empty map
   pvs = zipmap(keys(convert(var.PV, map(string))), values(convert(var.PV_DB, map(string))))
-
-  //pvs_merged = convert(merge(var.PV, var.PV_DB), map)
-  //pvs = zipmap(compact(keys(pvs_merged)), compact(values(pvs_merged)))
 }
 
 
