@@ -37,6 +37,11 @@ variables {
 
   # Pass in "ro" or "rw" if you want an NFS /home/ mounted into container, as ReadOnly or ReadWrite
   HOME = ""
+
+  # Setup a postgres DB like NOMAD_VAR_DB='{ 5432 = "db" }' - or override port num if desired
+  # Setup a mysql DB like NOMAD_VAR_MYSQL='{ 3306 = "dbmy" }' - or override port number if desired
+  PG = {}
+  MYSQL = {}
 }
 
 variable "PORTS" {
@@ -67,17 +72,6 @@ variable "PV" {
   default = {}
 }
 variable "PV_DB" {
-  type = map(string)
-  default = {}
-}
-
-variable "PG" {
-  # Setup a postgres DB like NOMAD_VAR_DB='{ 5432 = "db" }' - or override port num if desired
-  type = map(string)
-  default = {}
-}
-variable "MYSQL" {
-  # Setup a mysql DB like NOMAD_VAR_MYSQL='{ 3306 = "dbmy" }' - or override port number if desired
   type = map(string)
   default = {}
 }
