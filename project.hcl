@@ -72,7 +72,9 @@ variable "HOSTNAMES" {
 }
 
 variable "BIND_MOUNTS" {
-  type = list(strring)
+  # Pass in a list of [host VM => container] direct pass through of readonly volumes, eg:
+  #   NOMAD_VAR_BIND_MOUNTS='["/opt/something"]'
+  type = list(string)
   default = []
 }
 
