@@ -37,18 +37,6 @@ variables {
 
   # Pass in "ro" or "rw" if you want an NFS /home/ mounted into container, as ReadOnly or ReadWrite
   HOME = ""
-
-  # Persistent Volume(s).  To enable, coordinate a free slot with your nomad cluster administrator
-  # and then set like, for PV slot 3: { pv3 = "/pv" }
-  # You can override the dest dir location in container like: { pv3 = "/bitnami/wordpress" }
-  PV = { }
-  PV_DB = { }
-
-  # To setup a postgres DB, set like { 5432 = "db" } - or override port number if desired
-  PG = { }
-
-  # To setup a mysql DB, set like { 3306 = "dbmy" } - or override port number if desired
-  MYSQL = { }
 }
 
 variable "PORTS" {
@@ -59,7 +47,7 @@ variable "PORTS" {
   #   NOMAD_VAR_PORTS='{ 5000 = "http" }'
   #   NOMAD_VAR_PORTS='{ 5000 = "http", 666 = "cool-ness" }'
   #   NOMAD_VAR_PORTS='{ 8888 = "http", 8012 = "backend", 7777 = "extra-service" }'
-  type = map(number)
+  type = map(string)
   default = { 5000 = "http" }
 }
 
@@ -70,6 +58,30 @@ variable "HOSTNAMES" {
   type = list(string)
   default = ["group-project-branch-slug.example.com"]
 }
+
+# Persistent Volume(s).  To enable, coordinate a free slot with your nomad cluster administrator
+# and then set like, for PV slot 3: { pv3 = "/pv" }
+# You can override the dest dir location in container like: { pv3 = "/bitnami/wordpress" }
+variable "PV" {
+  type = map(string)
+  default = {}
+}
+variable "PV_DB" {
+  type = map(string)
+  default = {}
+}
+
+variable "PG" {
+  # To setup a postgres DB, set like { 5432 = "db" } - or override port number if desired
+  type = map(string)
+  default = {}
+}
+variable "MYSQL" {
+  # To setup a mysql DB, set like { 3306 = "dbmy" } - or override port number if desired
+  type = map(string)
+  default = {}
+}
+
 
 
 locals {
