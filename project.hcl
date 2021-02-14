@@ -255,7 +255,7 @@ job "NOMAD_VAR_SLUG" {
       dynamic "volume_mount" {
         # volume_mount.key == slot, eg: "/pv3"
         # volume_mount.value == dest dir, eg: "/pv" or "/bitnami/wordpress"
-        for_each = local.pv
+        for_each = local.pvs
         content {
           volume      = "${volume_mount.key}"
           destination = "${volume_mount.value}"
@@ -288,7 +288,7 @@ job "NOMAD_VAR_SLUG" {
       # volume.key == slot, eg: "/pv3"
       # volume.value == dest dir, eg: "/pv" or "/bitnami/wordpress"
       labels = [ volume.key ]
-      for_each = local.pv
+      for_each = local.pvs
       content {
         type      = "host"
         read_only = false
