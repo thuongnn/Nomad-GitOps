@@ -63,22 +63,22 @@ variable "HOSTNAMES" {
 # and then set like, for PV slot 3: { pv3 = "/pv" }
 # You can override the dest dir location in container like: { pv3 = "/bitnami/wordpress" }
 variable "PV" {
-  type = map(any)
+  type = map(string)
   default = { "" = "" }
 }
 variable "PV_DB" {
-  type = map(any)
+  type = map(string)
   default = { "" = "" }
 }
 
 variable "PG" {
   # To setup a postgres DB, set like { 5432 = "db" } - or override port number if desired
-  type = map(any)
+  type = map(string)
   default = { "" = "" }
 }
 variable "MYSQL" {
   # To setup a mysql DB, set like { 3306 = "dbmy" } - or override port number if desired
-  type = map(any)
+  type = map(string)
   default = { "" = "" }
 }
 
