@@ -75,7 +75,7 @@ variable "BIND_MOUNTS" {
   # Pass in a list of [host VM => container] direct pass through of readonly volumes, eg:
   #   NOMAD_VAR_BIND_MOUNTS='["/opt/something"]'
   type = list(string)
-  default = []
+  default = [""]
 }
 
 
@@ -215,7 +215,7 @@ job "NOMAD_VAR_SLUG" {
         memory_hard_limit = "${var.MEMORY * 10}"
 
         dynamic "mounts" {
-          for_each = var.BIND_MOUNTS
+          for_each = compact(var.BIND_MOUNTS)
           content {
             type = "bind"
             readonly = true
