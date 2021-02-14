@@ -39,9 +39,9 @@ include:
       [ "$NOMAD__HOSTNAME" = "" ]  &&  export NOMAD__HOSTNAME="${NOMAD__SLUG}.${DOM}"
 
       # anything still using older NOMAD__VARIABLE_NAME style stick with hcl1 & levant for now
-      HCL1=
+      export HCL1=
       tmp=$(env |egrep -c ^NOMAD__)
-      [ "$tmp" = "0" ]  &&  HCL1=1
+      [ "$tmp" = "0" ]  &&  export HCL1=1
 
       NOMARGS="-var-file=/tmp/env.json"
       [ $HCL1 ]  &&  NOMARGS="-hcl1"
