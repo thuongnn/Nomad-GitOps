@@ -38,6 +38,13 @@ variables {
   # Pass in "ro" or "rw" if you want an NFS /home/ mounted into container, as ReadOnly or ReadWrite
   HOME = ""
 
+  # Persistent Volume(s).  To enable, coordinate a free slot with your nomad cluster administrator
+  # and then set like, for PV slot 3 like:
+  #   NOMAD_VAR_PV='{ pv3 = "/pv" }'
+  #   NOMAD_VAR_PV='{ pv9 = "/bitnami/wordpress" }'
+  PV = {}
+  PV_DB = {}
+
   # Setup a postgres DB like NOMAD_VAR_DB='{ 5432 = "db" }' - or override port num if desired
   # Setup a mysql DB like NOMAD_VAR_MYSQL='{ 3306 = "dbmy" }' - or override port number if desired
   PG = {}
@@ -64,19 +71,6 @@ variable "HOSTNAMES" {
   default = ["group-project-branch-slug.example.com"]
 }
 
-# Persistent Volume(s).  To enable, coordinate a free slot with your nomad cluster administrator
-# and then set like, for PV slot 3: { pv3 = "/pv" }
-# You can override the dest dir location in container like: { pv3 = "/bitnami/wordpress" }
-variable "PV" {
-  type = map(string)
-  default = {}
-}
-variable "PV_DB" {
-  type = map(string)
-  default = {}
-}
-
-
 
 locals {
   # Ignore all this.  really :)
@@ -90,6 +84,8 @@ locals {
   # Too convoluted -- but need way to switch (logically) empty maps to actual empty maps
   PG    = "${zipmap(keys(convert(var.PG,    map(string))), values(convert(var.PG,    map(string))))}"
   MYSQL = "${zipmap(keys(convert(var.MYSQL, map(string))), values(convert(var.MYSQL, map(string))))}"
+  PV    = "${zipmap(keys(convert(var.PV,    map(string))), values(convert(var.PV,    map(string))))}"
+  PV_DB = "${zipmap(keys(convert(var.PV_DB, map(string))), values(convert(var.PV_DB, map(string))))}"
 
   # Too convoluted -- but need way to merge two (logically) empty maps to an empty map
   pvs = zipmap(keys(convert(var.PV, map(string))), values(convert(var.PV_DB, map(string))))
