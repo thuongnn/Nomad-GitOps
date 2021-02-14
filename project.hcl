@@ -217,7 +217,7 @@ job "NOMAD_VAR_SLUG" {
       }
 
 
-      "${var.JOB_TASK}"
+      var.JOB_TASK
 
 
       dynamic "volume_mount" {
