@@ -86,19 +86,20 @@ variable "MYSQL" {
 
 locals {
   # Ignore all this.  really :)
-  # More convoluted than should be, but remove map key/val for the port 5000
+  # Too convoluted -- but remove map key/val for the port 5000
   # get numeric sort to work right by 0-padding to 5 digits so that keys() returns like: [x, y, 5000]
   ports_sorted = "${zipmap(formatlist("%05d", keys(var.PORTS)), values(var.PORTS))}"
   ports_not_5000 = "${zipmap(
     formatlist("%d", slice(  keys(local.ports_sorted), 0, length(keys(var.PORTS)) - 1)),
     slice(values(local.ports_sorted), 0, length(keys(var.PORTS)) - 1))}"
 
-  # More convoluted than should be, but need way to merge two (logically) empty maps to an empty map
-  pvs_merged = compact(merge(var.PV, var.PV_DB))
-}
-local "pvs" {
-  type = map(string)
-  default = "${zipmap(keys(pvs_merged), values(pvs_merged))}"
+  # Too convoluted -- but need way to switch (logically) empty maps to actual empty maps
+  PG    = "${zipmap(compact(keys(var.PG)),    compact(values(var.PG)))}"
+  MYSQL = "${zipmap(compact(keys(var.MYSQL)), compact(values(var.MYSQL)))}"
+
+  # Too convoluted -- but need way to merge two (logically) empty maps to an empty map
+  pvs_merged = merge(var.PV, var.PV_DB)
+  pvs = "${zipmap(compact(keys(pvs_merged)), compact(values(pvs_merged)))}"
 }
 
 
@@ -127,25 +128,7 @@ job "NOMAD_VAR_SLUG" {
       dynamic "port" {
         # port.key == portnumber
         # port.value == portname
-        for_each = merge(var.PORTS, var.PG, var.MYSQL)
-        labels = [ "${port.value}" ]
-        content {
-          to = port.key
-        }
-      }
-    }
-    network {
-      dynamic "port" {
-        for_each = var.PG
-        labels = [ "${port.value}" ]
-        content {
-          to = port.key
-        }
-      }
-    }
-    network {
-      dynamic "port" {
-        for_each = var.MYSQL
+        for_each = merge(var.PORTS, local.PG, local.MYSQL)
         labels = [ "${port.value}" ]
         content {
           to = port.key
@@ -465,7 +448,7 @@ job "NOMAD_VAR_SLUG" {
 
   dynamic "constraint" {
     # If either PV or PV_DB is in use, constrain to the single "pv" node in the cluster
-    for_each = slice(keys(local.pv), 0, length(keys(local.pv)))
+    for_each = slice(keys(local.pvs), 0, min(1, length(keys(local.pvs))))
     content {
       attribute = "${meta.kind}"
       set_contains = "pv"
