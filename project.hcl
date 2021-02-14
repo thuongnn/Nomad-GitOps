@@ -49,6 +49,9 @@ variables {
   # Setup a mysql DB like NOMAD_VAR_MYSQL='{ 3306 = "dbmy" }' - or override port number if desired
   PG = {}
   MYSQL = {}
+
+  # more free-form area where an uppity repo might add arbitrary HCL into the task stanza
+  JOB_TASK = ''
 }
 
 variable "PORTS" {
@@ -219,10 +222,8 @@ job "NOMAD_VAR_SLUG" {
       }
 
 
-      // [[ if .NOMAD__JOB_TASK ]]
-      //   # arbitrary config a .gitlab-ci.yml can specify
-      //   ${var.JOB_TASK]]
-      // [[ end ]]
+      ${var.JOB_TASK}
+
 
       dynamic "volume_mount" {
         for_each = setintersection([var.HOME], ["ro"])
