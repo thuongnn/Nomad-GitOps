@@ -49,9 +49,6 @@ variables {
   # Setup a mysql DB like NOMAD_VAR_MYSQL='{ 3306 = "dbmy" }' - or override port number if desired
   PG = {}
   MYSQL = {}
-
-  # more free-form area where an uppity repo might add arbitrary HCL into the task stanza
-  JOB_TASK = ""
 }
 
 variable "PORTS" {
@@ -72,6 +69,11 @@ variable "HOSTNAMES" {
   #   NOMAD_VAR_HOSTNAMES='["www.example.com", "site.example.com"]'
   type = list(string)
   default = ["group-project-branch-slug.example.com"]
+}
+
+variable "BIND_MOUNTS" {
+  type = list(strring)
+  default = []
 }
 
 
@@ -209,15 +211,22 @@ job "NOMAD_VAR_SLUG" {
         # The MEMORY var now becomes a **soft limit**
         # We will 10x that for a **hard limit**
         memory_hard_limit = "${var.MEMORY * 10}"
+
+        dynamic "mounts" {
+          for_each = var.BIND_MOUNTS
+          content {
+            type = "bind"
+            readonly = true
+            source = "${mounts.key}"
+            target = "${mounts.key}"
+          }
+        }
       }
 
       resources {
         memory = "${var.MEMORY}"
         cpu    = "${var.CPU}"
       }
-
-
-      var.JOB_TASK
 
 
       dynamic "volume_mount" {
