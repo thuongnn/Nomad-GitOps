@@ -59,7 +59,7 @@ variable "PORTS" {
   #   NOMAD_VAR_PORTS='{ 5000 = "http" }'
   #   NOMAD_VAR_PORTS='{ 5000 = "http", 666 = "cool-ness" }'
   #   NOMAD_VAR_PORTS='{ 8888 = "http", 8012 = "backend", 7777 = "extra-service" }'
-  type = map(number = string)
+  type = map(number, string)
   default = { 5000 = "http" }
 }
 
