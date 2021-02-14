@@ -97,8 +97,11 @@ locals {
   PG    = "${zipmap(keys(convert(var.PG,    map(string))), values(convert(var.PG,    map(string))))}"
   MYSQL = "${zipmap(keys(convert(var.MYSQL, map(string))), values(convert(var.MYSQL, map(string))))}"
 
-  # Too convoluted -- but need way to merge two (logically) empty maps to an empty map
-  pvs = zipmap(keys(convert(var.PV, map(string))), values(convert(var.PV_DB, map(string))))
+  # Convert from implicit strings and/or empty maps to formal maps
+  PV    = convert(var.PV,    map(string))
+  PV_DB = convert(var.PV_DB, map(string))
+
+  pvs = merge(local.PV, local.PV_DB)
 }
 
 
@@ -351,7 +354,7 @@ job "NOMAD_VAR_SLUG" {
 //       } # end service
 
 //       volume_mount {
-//         volume      = "${var.PV_DB]]"
+//         volume      = "${local.PV_DB}"
 //         destination = "[[ or (.NOMAD__PV_DB_DEST) "/pv" ]]"
 //         read_only   = false
 //       }
@@ -421,7 +424,7 @@ job "NOMAD_VAR_SLUG" {
 //       } # end service
 
 //       volume_mount {
-//         volume      = "${var.PV_DB]]"
+//         volume      = "${local.PV_DB}"
 //         destination = "[[ or (.NOMAD__PV_DB_DEST) "/pv" ]]"
 //         read_only   = false
 //       }
