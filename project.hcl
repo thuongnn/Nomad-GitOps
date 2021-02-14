@@ -98,7 +98,7 @@ locals {
   MYSQL = "${zipmap(compact(keys(var.MYSQL)), compact(values(var.MYSQL)))}"
 
   # Too convoluted -- but need way to merge two (logically) empty maps to an empty map
-  pvs = zipmap(keys(convert(var.PV, map)), values(convert(var.PV_DB, map)))
+  pvs = zipmap(keys(convert(var.PV, map(string))), values(convert(var.PV_DB, map(string))))
 
   //pvs_merged = convert(merge(var.PV, var.PV_DB), map)
   //pvs = zipmap(compact(keys(pvs_merged)), compact(values(pvs_merged)))
