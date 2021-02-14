@@ -22,8 +22,14 @@ variables {
   # setting or repo's `.gitlab-ci.yml` file.
   # Each CI/CD var name should be prefixed with 'NOMAD_VAR_'.
 
-  # Note: cant use a port over port 5000 right now
-  PORTS = { 5000 = "http" } # , 666 = "cool-ness", "8" = "ugh" } # chexxx & docme
+  # Note: to use a secondary port > 5000, right now, you have to make the main/http port be
+  # greater than it.  Additionally, these are all public ports, right out to the browser.
+  # So for a _nomad cluster_ -- anything non-5000 must be unique across all projects deployed there.
+  # Examples:
+  #   NOMAD_VAR_PORTS='{ 5000 = "http" }'
+  #   NOMAD_VAR_PORTS='{ 5000 = "http", 666 = "cool-ness" }'
+  #   NOMAD_VAR_PORTS='{ 8888 = "http", 8012 = "backend", 7777 = "extra-service" }'
+  PORTS = { 5000 = "http" }
 
   # default 300 MB
   MEMORY = 300
