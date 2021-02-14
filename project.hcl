@@ -64,11 +64,11 @@ variable "HOSTNAMES" {
 # You can override the dest dir location in container like: { pv3 = "/bitnami/wordpress" }
 variable "PV" {
   type = map(string)
-  default = { "" = "" }
+  default = {}
 }
 variable "PV_DB" {
   type = map(string)
-  default = { "" = "" }
+  default = {}
 }
 
 variable "PG" {
@@ -98,8 +98,10 @@ locals {
   MYSQL = "${zipmap(compact(keys(var.MYSQL)), compact(values(var.MYSQL)))}"
 
   # Too convoluted -- but need way to merge two (logically) empty maps to an empty map
-  pvs_merged = convert(merge(var.PV, var.PV_DB), map)
-  pvs = zipmap(compact(keys(pvs_merged)), compact(values(pvs_merged)))
+  pvs = zipmap(keys(convert(var.PV map)), values(convert(var.PV_DB, map)))
+
+  //pvs_merged = convert(merge(var.PV, var.PV_DB), map)
+  //pvs = zipmap(compact(keys(pvs_merged)), compact(values(pvs_merged)))
 }
 
 
