@@ -97,11 +97,8 @@ locals {
   PG    = "${zipmap(keys(convert(var.PG,    map(string))), values(convert(var.PG,    map(string))))}"
   MYSQL = "${zipmap(keys(convert(var.MYSQL, map(string))), values(convert(var.MYSQL, map(string))))}"
 
-  # Convert from implicit strings and/or empty maps to formal maps
-  PV    = convert(var.PV,    map(string))
-  PV_DB = convert(var.PV_DB, map(string))
-
-  pvs = merge(convert(var.PV, map(string)), convert(var.PV_DB, map(string)))
+  # Too convoluted -- but need way to merge two (logically) empty maps to an empty map
+  pvs = zipmap(keys(convert(var.PV, map(string))), values(convert(var.PV_DB, map(string))))
 }
 
 
