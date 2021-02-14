@@ -73,9 +73,10 @@ variable "HOSTNAMES" {
 
 variable "BIND_MOUNTS" {
   # Pass in a list of [host VM => container] direct pass through of readonly volumes, eg:
-  #   NOMAD_VAR_BIND_MOUNTS='["/opt/something"]'
+  #   NOMAD_VAR_BIND_MOUNTS='["/opt/something", "/tmp/beer"]'
+  # As of now you have to pass in 2 and only 2... 🤦‍♀️
   type = list(string)
-  default = [""]
+  default = ["/tmp/cry", "/tmp/beer"]
 }
 
 
@@ -214,15 +215,17 @@ job "NOMAD_VAR_SLUG" {
         # We will 10x that for a **hard limit**
         memory_hard_limit = "${var.MEMORY * 10}"
 
-        dynamic "mounts" {
-          for_each = compact(convert(var.BIND_MOUNTS, list(string)))
-          content {
-            type = "bind"
-            readonly = true
-            source = "${mounts.key}"
-            target = "${mounts.key}"
-          }
-        }
+        mounts = [{
+          type = "bind"
+          readonly = true
+          source = "${var.BIND_MOUNTS[0]}"
+          target = "${var.BIND_MOUNTS[0]}"
+        }, {
+          type = "bind"
+          readonly = true
+          source = "${var.BIND_MOUNTS[1]}"
+          target = "${var.BIND_MOUNTS[1]}"
+        }]
       }
 
       resources {
