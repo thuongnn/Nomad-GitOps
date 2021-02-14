@@ -54,7 +54,7 @@ variables {
 variable "PORTS" {
   # Note: to use a secondary port > 5000, right now, you have to make the main/http port be
   # greater than it.  Additionally, these are all public ports, right out to the browser.
-  # So for a _nomad cluster_ -- anything non-5000 must be unique across all projects deployed there.
+  # So for a *nomad cluster* -- anything not 5000 must be unique across all projects deployed there.
   # Examples:
   #   NOMAD_VAR_PORTS='{ 5000 = "http" }'
   #   NOMAD_VAR_PORTS='{ 5000 = "http", 666 = "cool-ness" }'
@@ -66,7 +66,7 @@ variable "PORTS" {
 variable "HOSTNAMES" {
   # This autogenerates from https://gitlab.com/internetarchive/nomad/-/blob/master/.gitlab-ci.yml
   # but you can override to 1 or more custom hostnames if desired, eg:
-  #   export NOMAD_VAR_HOSTNAMES=["www.example.com", "site.example.com"]
+  #   NOMAD_VAR_HOSTNAMES='["www.example.com", "site.example.com"]'
   type = list(string)
   default = ["group-project-branch-slug.example.com"]
 }
@@ -138,7 +138,7 @@ job "NOMAD_VAR_SLUG" {
     #
     service {
       name = "${var.SLUG}"
-      # second line automatically redirects any http traffic to https: chexxx all tags
+      # second line automatically redirects any http traffic to https
       tags = concat([for HOST in var.HOSTNAMES :
         "urlprefix-${HOST}:443/"], [for HOST in var.HOSTNAMES :
         "urlprefix-${HOST}:80/ redirect=308,https://${HOST}/"])
