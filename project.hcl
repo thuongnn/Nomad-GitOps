@@ -76,7 +76,7 @@ variable "BIND_MOUNTS" {
   #   NOMAD_VAR_BIND_MOUNTS='["/opt/something", "/tmp/beer"]'
   # As of now you have to pass in 2 and only 2... 🤦‍♀️
   type = list(string)
-  default = ["/tmp/cry", "/tmp/beer"]
+  default = ["/tmp/.cry", "/tmp/.beer"]
 }
 
 
