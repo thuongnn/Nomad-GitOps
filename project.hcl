@@ -202,11 +202,6 @@ job "NOMAD_VAR_SLUG" {
 
         ports = [for portnumber, portname in var.PORTS : portname]
 
-        // [[ if .NOMAD__JOB_TASK_CONFIG ]]
-        //   # arbitrary config a .gitlab-ci.yml can specify
-        //   ${var.JOB_TASK_CONFIG]]
-        // [[ end ]]
-
         volumes = [
           "/kv/${var.SLUG}:/kv"
         ]
@@ -222,7 +217,7 @@ job "NOMAD_VAR_SLUG" {
       }
 
 
-      ${var.JOB_TASK}
+      "${var.JOB_TASK}"
 
 
       dynamic "volume_mount" {
