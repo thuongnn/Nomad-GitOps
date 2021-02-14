@@ -98,7 +98,7 @@ locals {
   MYSQL = "${zipmap(compact(keys(var.MYSQL)), compact(values(var.MYSQL)))}"
 
   # Too convoluted -- but need way to merge two (logically) empty maps to an empty map
-  pvs_merged = merge(var.PV, var.PV_DB)
+  pvs_merged = convert(merge(var.PV, var.PV_DB), map)
   pvs = "${zipmap(compact(keys(pvs_merged)), compact(values(pvs_merged)))}"
 }
 
@@ -447,7 +447,7 @@ job "NOMAD_VAR_SLUG" {
   }
 
   dynamic "constraint" {
-    # If either PV or PV_DB is in use, constrain to the single "pv" node in the cluster
+    # If either PV or PV_DB is in use, constrain deployment to the single "pv" node in the cluster
     for_each = slice(keys(local.pvs), 0, min(1, length(keys(local.pvs))))
     content {
       attribute = "${meta.kind}"
