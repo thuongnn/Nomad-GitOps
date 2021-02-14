@@ -51,7 +51,7 @@ variables {
   MYSQL = {}
 
   # more free-form area where an uppity repo might add arbitrary HCL into the task stanza
-  JOB_TASK = ''
+  JOB_TASK = ""
 }
 
 variable "PORTS" {
