@@ -214,7 +214,7 @@ job "NOMAD_VAR_SLUG" {
         # We will 10x that for a **hard limit**
         memory_hard_limit = "${var.MEMORY * 10}"
 
-        dynamic "mounts" {
+        dynamic "mount" {
           for_each = compact(var.BIND_MOUNTS)
           content {
             type = "bind"
