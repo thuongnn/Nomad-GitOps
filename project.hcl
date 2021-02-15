@@ -1,21 +1,24 @@
 # Variables used below and their defaults if not set externally
 variables {
-  # these all pass through from GitLab [build] phase
-  CI_REGISTRY = "registry.example.com"                      # registry hostname
-  CI_REGISTRY_IMAGE = "registry.example.com/group/project"  # registry image location
+  # These all pass through from GitLab [build] phase.
+  # Some defaults filled in w/ example repo "bai" in group "internetarchive"
+  # (but all 7 get replaced during normal GitLab CI/CD from CI/CD variables).
+  CI_REGISTRY = "registry.gitlab.com"                       # registry hostname
+  CI_REGISTRY_IMAGE = "registry.gitlab.com/internetarchive/bai"  # registry image location
   CI_COMMIT_REF_SLUG = "master"                             # branch name, slugged
-  CI_COMMIT_SHA = "abc123"                                  # repo's commit for current pipline
-  CI_PROJECT_PATH_SLUG = "group-project"                    # repo and group it is part of, slugged
+  CI_COMMIT_SHA = "latest"                                  # repo's commit for current pipline
+  CI_PROJECT_PATH_SLUG = "internetarchive-bai"              # repo and group it is part of, slugged
   CI_REGISTRY_USER = "comes-from-gitlab"                    # set for each pipeline and ..
   CI_REGISTRY_PASSWORD = "12345-from-spaceballs"            # .. allows pull from private registry
-  # optional (but suggested!) CI/CD vars:
+  # optional (but suggested!) CI/CD group or project vars:
   CI_R2_USER = ""                                           # optional more reliable alternative ..
   CI_R2_PASS = ""                                           # .. to 1st user/pass (see README.md)
 
 
   # This autogenerates from https://gitlab.com/internetarchive/nomad/-/blob/master/.gitlab-ci.yml
+  # This will normally have "-$CI_COMMIT_REF_SLUG" appended, but is omitted for "master" branch.
   # You should not change this.
-  SLUG = "group-project-branch-slug"
+  SLUG = "internetarchive-bai"
 
 
   # The remaining vars can be optionally set/overriden in a repo via CI/CD variables in repo's
@@ -37,6 +40,9 @@ variables {
 
   # Pass in "ro" or "rw" if you want an NFS /home/ mounted into container, as ReadOnly or ReadWrite
   HOME = ""
+
+  # There are more variables immediately after this - but they are "lists" or "maps" and need
+  # special definitions to not have defaults or overrides be treated as strings.
 }
 
 # Persistent Volume(s).  To enable, coordinate a free slot with your nomad cluster administrator
@@ -90,6 +96,7 @@ variable "MYSQL" {
   type = map(string)
   default = {}
 }
+
 
 locals {
   # Ignore all this.  really :)
