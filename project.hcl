@@ -297,136 +297,144 @@ job "NOMAD_VAR_SLUG" {
 
 
 
-//     [[ if .NOMAD__PG ]]
-//     # Optional add-on postgres DB.  @see README.md for more details to enable.
-//     task "${var.SLUG}-db" {
-//       driver = "docker"
+    # Optional add-on postgres DB.  @see README.md for more details to enable.
+    dynamic "task" {
+      # task.key == DB port number
+      # task.value == DB name like 'db'
+      for_each = local.PG
+      labels = ["${var.SLUG}-db"]
+      content {
+        driver = "docker"
 
-//       config {
-//         image = "docker.io/bitnami/postgresql:11.7.0-debian-10-r9"
-//         port_map {
-//           db = 5432
-//         }
-//       }
+        config {
+          image = "docker.io/bitnami/postgresql:11.7.0-debian-10-r9"
+          port_map {
+            "${task.value}" = "${task.key}"
+          }
+        }
 
-//       template {
-//         data = <<EOH
-// POSTGRESQL_PASSWORD={{ file "/kv/${var.SLUG}/DB_PW" }}
-// EOH
-//         destination = "secrets/file.env"
-//         env         = true
-//       }
+        template {
+          data = <<EOH
+POSTGRESQL_PASSWORD={{ file "/kv/${var.SLUG}/DB_PW" }}
+EOH
+          destination = "secrets/file.env"
+          env         = true
+        }
 
-//       service {
-//         name = "${var.SLUG}-db"
-//         port = "db"
+        service {
+          name = "${var.SLUG}-db"
+          port = "${task.value}"
 
-//         check {
-//           expose   = true
-//           type     = "tcp"
-//           interval = "2s"
-//           timeout  = "2s"
-//         }
+          check {
+            expose   = true
+            type     = "tcp"
+            interval = "2s"
+            timeout  = "2s"
+          }
 
-//         check {
-//           # This posts containers bridge IP address (starting with "172.") into
-//           # an expected file that other docker container can reach this
-//           # DB docker container with.
-//           type     = "script"
-//           name     = "setup"
-//           command  = "/bin/sh"
-//           args     = ["-c", "hostname -i |tee /alloc/data/${var.CI_PROJECT_PATH_SLUG]]-db.ip"]
-//           interval = "1h"
-//           timeout  = "10s"
-//         }
+          check {
+            # This posts containers bridge IP address (starting with "172.") into
+            # an expected file that other docker container can reach this
+            # DB docker container with.
+            type     = "script"
+            name     = "setup"
+            command  = "/bin/sh"
+            args     = ["-c", "hostname -i |tee /alloc/data/${var.CI_PROJECT_PATH_SLUG}-db.ip"]
+            interval = "1h"
+            timeout  = "10s"
+          }
 
-//         check {
-//           type     = "script"
-//           name     = "db-ready"
-//           command  = "/usr/bin/pg_isready"
-//           args     = ["-Upostgres", "-h", "127.0.0.1", "-p", "5432"]
-//           interval = "10s"
-//           timeout  = "10s"
-//         }
-//       } # end service
+          check {
+            type     = "script"
+            name     = "db-ready"
+            command  = "/usr/bin/pg_isready"
+            args     = ["-Upostgres", "-h", "127.0.0.1", "-p", "${task.key}"]
+            interval = "10s"
+            timeout  = "10s"
+          }
+        } # end service
 
-//       volume_mount {
-//         volume      = "${local.PV_DB}"
-//         destination = "[[ or (.NOMAD__PV_DB_DEST) "/pv" ]]"
-//         read_only   = false
-//       }
-//     } # end task
-//     [[ end ]]
+        volume_mount {
+          volume      = "${element(keys(local.PV_DB), 0)}"
+          destination = "${element(values(local.PV_DB), 0)}"
+          read_only   = false
+        }
+      }
+    } # end dynamic "task"
 
 
-//     [[ if .NOMAD__MYSQL ]]
-//     # Optional add-on mysql/maria DB.  @see README.md for more details to enable.
-//     #   https://github.com/bitnami/bitnami-docker-wordpress
-//     task "${var.SLUG}-db" {
-//       driver = "docker"
 
-//       config {
-//         image = "bitnami/mariadb" # :10.3-debian-10
-//         port_map {
-//           dbmy = 3306
-//         }
-//       }
+    # Optional add-on mysql/maria DB.  @see README.md for more details to enable.
+    dynamic "task" {
+      # task.key == DB port number
+      # task.value == DB name like 'dbmy'
+      for_each = local.MYSQL
+      labels = ["${var.SLUG}-db"]
+      content {
+        # https://github.com/bitnami/bitnami-docker-wordpress
+        driver = "docker"
 
-//       template {
-//         data = <<EOH
-// MARIADB_PASSWORD={{ file "/kv/${var.SLUG}/DB_PW" }}
-// WORDPRESS_DATABASE_PASSWORD={{ file "/kv/${var.SLUG}/DB_PW" }}
-// EOH
-//         destination = "secrets/file.env"
-//         env         = true
-//       }
+        config {
+          image = "bitnami/mariadb" # :10.3-debian-10
+          port_map {
+            "${task.value}" = "${task.key}"
+          }
+        }
 
-//       env {
-//         MARIADB_USER = "bn_wordpress"
-//         MARIADB_DATABASE = "bitnami_wordpress"
-//         ALLOW_EMPTY_PASSWORD = "yes"
-//       }
+        template {
+          data = <<EOH
+MARIADB_PASSWORD={{ file "/kv/${var.SLUG}/DB_PW" }}
+WORDPRESS_DATABASE_PASSWORD={{ file "/kv/${var.SLUG}/DB_PW" }}
+EOH
+          destination = "secrets/file.env"
+          env         = true
+        }
 
-//       service {
-//         name = "${var.SLUG}-db"
-//         port = "dbmy"
+        env {
+          MARIADB_USER = "bn_wordpress"
+          MARIADB_DATABASE = "bitnami_wordpress"
+          ALLOW_EMPTY_PASSWORD = "yes"
+        }
 
-//         check {
-//           expose   = true
-//           type     = "tcp"
-//           interval = "2s"
-//           timeout  = "2s"
-//         }
+        service {
+          name = "${var.SLUG}-db"
+          port = "${task.value}"
 
-//         check {
-//           # This posts containers bridge IP address (starting with "172.") into
-//           # an expected file that other docker container can reach this
-//           # DB docker container with.
-//           type     = "script"
-//           name     = "setup"
-//           command  = "/bin/sh"
-//           args     = ["-c", "hostname -i |tee /alloc/data/${var.CI_PROJECT_PATH_SLUG]]-db.ip"]
-//           interval = "1h"
-//           timeout  = "10s"
-//         }
+          check {
+            expose   = true
+            type     = "tcp"
+            interval = "2s"
+            timeout  = "2s"
+          }
 
-//         check {
-//           type     = "script"
-//           name     = "db-ping"
-//           command  = "/opt/bitnami/mariadb/bin/mysqladmin"
-//           args     = ["ping", "silent"]
-//           interval = "10s"
-//           timeout  = "10s"
-//         }
-//       } # end service
+          check {
+            # This posts containers bridge IP address (starting with "172.") into
+            # an expected file that other docker container can reach this
+            # DB docker container with.
+            type     = "script"
+            name     = "setup"
+            command  = "/bin/sh"
+            args     = ["-c", "hostname -i |tee /alloc/data/${var.CI_PROJECT_PATH_SLUG}-db.ip"]
+            interval = "1h"
+            timeout  = "10s"
+          }
 
-//       volume_mount {
-//         volume      = "${local.PV_DB}"
-//         destination = "[[ or (.NOMAD__PV_DB_DEST) "/pv" ]]"
-//         read_only   = false
-//       }
-//    } # end task
-//    [[ end ]]
+          check {
+            type     = "script"
+            name     = "db-ping"
+            command  = "/opt/bitnami/mariadb/bin/mysqladmin"
+            args     = ["ping", "silent"]
+            interval = "10s"
+            timeout  = "10s"
+          }
+        } # end service
+
+        volume_mount {
+          volume      = "${element(keys(local.PV_DB), 0)}"
+          destination = "${element(values(local.PV_DB), 0)}"
+          read_only   = false
+        }
+    } # end dynamic "task"
 
   } # end group
 
