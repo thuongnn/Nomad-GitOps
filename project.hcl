@@ -324,6 +324,11 @@ job "NOMAD_VAR_SLUG" {
           port_map {
             db = "${task.key}" # xxx should be task.value = ..
           }
+
+          volumes = [
+            "/kv/${var.SLUG}:/kv",
+            "/kv/${var.SLUG}:${NOMAD_SECRETS_DIR}/kv"
+          ]
         }
 
         template {
@@ -366,12 +371,6 @@ EOH
             timeout  = "10s"
           }
         } # end service
-
-        volume_mount {
-          volume      = "/kv/${var.SLUG}"
-          destination = "${NOMAD_SECRETS_DIR}/kv"
-          read_only   = true
-        }
 
         volume_mount {
           volume      = "${element(keys(var.PV_DB), 0)}"
