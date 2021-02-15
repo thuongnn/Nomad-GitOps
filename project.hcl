@@ -320,7 +320,7 @@ job "NOMAD_VAR_SLUG" {
 
         template {
           data = <<EOH
-POSTGRESQL_PASSWORD={{ file "/kv/${var.SLUG}/DB_PW" }}
+POSTGRESQL_PASSWORD={{ file "${NOMAD_SECRETS_DIR}/DB_PW" }}
 EOH
           destination = "secrets/file.env"
           env         = true
@@ -358,6 +358,12 @@ EOH
             timeout  = "10s"
           }
         } # end service
+
+        volume_mount {
+          volume      = "/kv/${var.SLUG}/DB_PW"
+          destination = "${NOMAD_SECRETS_DIR}/PB_PW"
+          read_only   = true
+        }
 
         volume_mount {
           volume      = "${element(keys(var.PV_DB), 0)}"
