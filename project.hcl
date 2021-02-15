@@ -309,7 +309,7 @@ job "NOMAD_VAR_SLUG" {
         config {
           image = "docker.io/bitnami/postgresql:11.7.0-debian-10-r9"
           port_map {
-            "${task.value}" = "${task.key}"
+            db = "${task.key}" # xxx should be task.value = ..
           }
         }
 
@@ -359,7 +359,7 @@ EOH
           destination = "${element(values(local.PV_DB), 0)}"
           read_only   = false
         }
-      }
+      } # end content
     } # end dynamic "task"
 
 
@@ -377,7 +377,7 @@ EOH
         config {
           image = "bitnami/mariadb" # :10.3-debian-10
           port_map {
-            "${task.value}" = "${task.key}"
+            dbmy = "${task.key}" # xxx should be task.value = ..
           }
         }
 
@@ -434,6 +434,7 @@ EOH
           destination = "${element(values(local.PV_DB), 0)}"
           read_only   = false
         }
+      } # end content
     } # end dynamic "task"
 
   } # end group
