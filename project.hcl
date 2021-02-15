@@ -37,18 +37,19 @@ variables {
 
   # Pass in "ro" or "rw" if you want an NFS /home/ mounted into container, as ReadOnly or ReadWrite
   HOME = ""
+}
 
-  # Persistent Volume(s).  To enable, coordinate a free slot with your nomad cluster administrator
-  # and then set like, for PV slot 3 like:
-  #   NOMAD_VAR_PV='{ pv3 = "/pv" }'
-  #   NOMAD_VAR_PV='{ pv9 = "/bitnami/wordpress" }'
-  PV = {}
-  PV_DB = {}
-
-  # Setup a postgres DB like NOMAD_VAR_DB='{ 5432 = "db" }' - or override port num if desired
-  # Setup a mysql DB like NOMAD_VAR_MYSQL='{ 3306 = "dbmy" }' - or override port number if desired
-  PG = {}
-  MYSQL = {}
+# Persistent Volume(s).  To enable, coordinate a free slot with your nomad cluster administrator
+# and then set like, for PV slot 3 like:
+#   NOMAD_VAR_PV='{ pv3 = "/pv" }'
+#   NOMAD_VAR_PV_DB='{ pv9 = "/bitnami/wordpress" }'
+variable "PV" {
+  type = map(string)
+  default = {}
+}
+variable "PV_DB" {
+  type = map(string)
+  default = {}
 }
 
 variable "PORTS" {
@@ -79,6 +80,16 @@ variable "BIND_MOUNTS" {
   default = ["/usr/games", "/usr/local/games"]
 }
 
+variable "PG" {
+  # Setup a postgres DB like NOMAD_VAR_PG='{ 5432 = "db" }' - or override port num if desired
+  type = map(string)
+  default = {}
+}
+variable "MYSQL" {
+  # Setup a mysql DB like NOMAD_VAR_MYSQL='{ 3306 = "dbmy" }' - or override port number if desired
+  type = map(string)
+  default = {}
+}
 
 locals {
   # Ignore all this.  really :)
@@ -89,14 +100,8 @@ locals {
     formatlist("%d", slice(  keys(local.ports_sorted), 0, length(keys(var.PORTS)) - 1)),
     slice(values(local.ports_sorted), 0, length(keys(var.PORTS)) - 1))}"
 
-  # Too convoluted -- but need way to switch (logically) empty maps to actual empty maps
-  PG    = "${zipmap(keys(convert(var.PG,    map(string))), values(convert(var.PG,    map(string))))}"
-  MYSQL = "${zipmap(keys(convert(var.MYSQL, map(string))), values(convert(var.MYSQL, map(string))))}"
-  PV    = "${zipmap(keys(convert(var.PV,    map(string))), values(convert(var.PV,    map(string))))}"
-  PV_DB = "${zipmap(keys(convert(var.PV_DB, map(string))), values(convert(var.PV_DB, map(string))))}"
-
-  # Too convoluted -- but need way to merge two (logically) empty maps to an empty map
-  pvs = zipmap(keys(convert(var.PV, map(string))), values(convert(var.PV_DB, map(string))))
+  # NOTE: 3rd arg is hcl2 quirk needed in case first two args are empty maps as well
+  pvs = merge(var.PV, var.PV_DB, {})
 }
 
 
@@ -125,7 +130,7 @@ job "NOMAD_VAR_SLUG" {
       dynamic "port" {
         # port.key == portnumber
         # port.value == portname
-        for_each = merge(var.PORTS, local.PG, local.MYSQL)
+        for_each = merge(var.PORTS, var.PG, var.MYSQL, {})
         labels = [ "${port.value}" ]
         content {
           to = port.key
@@ -301,7 +306,7 @@ job "NOMAD_VAR_SLUG" {
     dynamic "task" {
       # task.key == DB port number
       # task.value == DB name like 'db'
-      for_each = local.PG
+      for_each = var.PG
       labels = ["${var.SLUG}-db"]
       content {
         driver = "docker"
@@ -316,7 +321,7 @@ job "NOMAD_VAR_SLUG" {
 
         template {
           data = <<EOH
-POSTGRESQL_PASSWORD={{ file "/kv/${var.SLUG}/DB_PW" }}
+POSTGRESQL_PASSWORD={{ file "${NOMAD_SECRETS_DIR}/DB_PW" }}
 EOH
           destination = "secrets/file.env"
           env         = true
@@ -356,8 +361,14 @@ EOH
         } # end service
 
         volume_mount {
-          volume      = "${element(keys(local.PV_DB), 0)}"
-          destination = "${element(values(local.PV_DB), 0)}"
+          volume      = "/kv/${var.SLUG}/DB_PW"
+          destination = "${NOMAD_SECRETS_DIR}/PB_PW"
+          read_only   = true
+        }
+
+        volume_mount {
+          volume      = "${element(keys(var.PV_DB), 0)}"
+          destination = "${element(values(var.PV_DB), 0)}"
           read_only   = false
         }
       } # end content
@@ -369,7 +380,7 @@ EOH
     dynamic "task" {
       # task.key == DB port number
       # task.value == DB name like 'dbmy'
-      for_each = local.MYSQL
+      for_each = var.MYSQL
       labels = ["${var.SLUG}-db"]
       content {
         # https://github.com/bitnami/bitnami-docker-wordpress
@@ -432,8 +443,8 @@ EOH
         } # end service
 
         volume_mount {
-          volume      = "${element(keys(local.PV_DB), 0)}"
-          destination = "${element(values(local.PV_DB), 0)}"
+          volume      = "${element(keys(var.PV_DB), 0)}"
+          destination = "${element(values(var.PV_DB), 0)}"
           read_only   = false
         }
       } # end content
