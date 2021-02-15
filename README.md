@@ -40,32 +40,23 @@ test:
 ### customizing
 There are various options that can be used in conjunction with the `project.nomad` and `.gitlab-ci.yml` files, keys:
 ```text
+NOMAD_VAR_BIND_MOUNTS
 NOMAD_VAR_CHECK_PROTOCOL
+NOMAD_VAR_COUNT
 NOMAD_VAR_CPU
 NOMAD_VAR_HEALTH_TIMEOUT
-NOMAD_VAR_HOME_RO
-NOMAD_VAR_HOME_RW
-NOMAD_VAR_HOSTNAME
-NOMAD_VAR_HOSTNAME2
-NOMAD_VAR_HOSTNAME3
-NOMAD_VAR_JOB_GROUP
-NOMAD_VAR_JOB_TASK
-NOMAD_VAR_JOB_TASK_CONFIG
+NOMAD_VAR_HOME
+NOMAD_VAR_HOSTNAMES
 NOMAD_VAR_MEMORY
 NOMAD_VAR_MYSQL
 NOMAD_VAR_NO_DEPLOY
 NOMAD_VAR_PG
-NOMAD_VAR_PORT
-NOMAD_VAR_PORT2
-NOMAD_VAR_PORT2_NAME
-NOMAD_VAR_PORT3
-NOMAD_VAR_PORT3_NAME
+NOMAD_VAR_PORTS
 NOMAD_VAR_PV
 NOMAD_VAR_PV_DB
-NOMAD_VAR_PV_DB_DEST
-NOMAD_VAR_PV_DEST
 ```
-- Our customizations always prefix with `NOMAD_VAR_` (note the _two_ `_` chars - to avoid confusion with or tangling with nomad system variables that prefix with one `_` char (eg: `NOMAD_ADDR`)).
+- See the top of [project.nomad](project.nomad)
+- Our customizations always prefix with `NOMAD_VAR_`.
 - You can simply insert them, with values, in your project's `.gitlab-ci.yml` file before including _our_ `.gitlab-ci.yml` like above.  Example:
 ```yaml
 variables:
@@ -131,29 +122,6 @@ variables:
   - `NFSHOME=1` - setup some minor config to support a r/w `/home/` and r/o `/home/`
 
 
-## archive.org minimum requirements for CI/CD:
-- docker exec ✅
-  - pop into deployed container and poke around - similar to `ssh`
-  - @see [aliases](aliases)  `nom-ssh`
-- docker cp ✅
-  - hot-copy edited file into _running_ deploy (avoid full pipeline to see changes)
-  - @see [aliases](aliases)  `nom-cp`
-  - hook in VSCode
-    [sync-rsync](https://marketplace.visualstudio.com/items?itemName=vscode-ext.sync-rsync)
-    package to 'copy (into container) on save'
-- secrets ✅
-- load balancers ✅
-- 2+ instances HPA ✅
-- PV ✅
-- http/2 ✅
-- auto http => https ✅
-- web sockets ✅
-- auto-embed HSTS in https headers, similar to kubernetes ✅
-  - eg: `Strict-Transport-Security: max-age=15724800; includeSubdomains`
-- [workaround via deploy token] _sometimes_ `docker pull` was failing on deploy...
-  - https://docs.gitlab.com/ee/user/project/deploy_tokens/index.html#gitlab-deploy-token
-
-
 ## monitoring GUI urls (via ssh tunnelling above)
 - @see [aliases](aliases)  `nom-tunnel`
 - http://localhost:8500  # consul
@@ -196,10 +164,9 @@ wget -qO- 'http://127.0.0.1:8500/v1/catalog/services' |jq .
 ## Optional add-ons to your project
 ### Postgres DB
 Requirements:
-- set environment variables in your `.gitlab-ci.yml`:
+- set environment variables in your project's `.gitlab-ci.yml`:
   - `NOMAD_VAR_PG`
   - `NOMAD_VAR_PV_DB`
-  - `NOMAD_VAR_PV_DB_DEST`
 - Insert `DB_PW` value into `/kv/[NOMAD_VAR_SLUG]/DB_PW` on your nomad hosts
 - install `jq` package via your `Dockerfile`
 - Your main/webapp container can slip this in to it's `Dockerfile`'s `CMD` line to setup DB access.
@@ -213,12 +180,10 @@ echo DATABASE_URL=postgres://postgres:${DB_PW}@$(cat /alloc/data/*-db.ip):5432/p
 
 ### MySQL / mariaDB
 Requirements:
-- set environment variables in your `.gitlab-ci.yml`:
+- set environment variables in your project's `.gitlab-ci.yml`:
   - `NOMAD_VAR_MYSQL`
   - `NOMAD_VAR_PV`
-  - `NOMAD_VAR_PV_DEST`
   - `NOMAD_VAR_PV_DB`
-  - `NOMAD_VAR_PV_DB_DEST`
 - Insert `DB_PW` value into `/kv/[NOMAD_VAR_SLUG]/DB_PW` on your nomad hosts
 - Your main/webapp container can slip this in to it's `Dockerfile`'s `CMD` line to setup DB access.
   NOTE: The sleep should ensure `/alloc/data/*-db.ip` file gets created by DB Task 1st healthcheck
@@ -243,3 +208,26 @@ gitlab-runner start
 
 # multi-node architecture
 ![Architecture](architecture.drawio.svg)
+
+
+## archive.org minimum requirements for CI/CD:
+- docker exec ✅
+  - pop into deployed container and poke around - similar to `ssh`
+  - @see [aliases](aliases)  `nom-ssh`
+- docker cp ✅
+  - hot-copy edited file into _running_ deploy (avoid full pipeline to see changes)
+  - @see [aliases](aliases)  `nom-cp`
+  - hook in VSCode
+    [sync-rsync](https://marketplace.visualstudio.com/items?itemName=vscode-ext.sync-rsync)
+    package to 'copy (into container) on save'
+- secrets ✅
+- load balancers ✅
+- 2+ instances HPA ✅
+- PV ✅
+- http/2 ✅
+- auto http => https ✅
+- web sockets ✅
+- auto-embed HSTS in https headers, similar to kubernetes ✅
+  - eg: `Strict-Transport-Security: max-age=15724800; includeSubdomains`
+- [workaround via deploy token] _sometimes_ `docker pull` was failing on deploy...
+  - https://docs.gitlab.com/ee/user/project/deploy_tokens/index.html#gitlab-deploy-token
