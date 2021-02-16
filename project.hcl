@@ -322,7 +322,7 @@ job "NOMAD_VAR_SLUG" {
           image = "docker.io/bitnami/postgresql:11.7.0-debian-10-r9"
           # https://www.nomadproject.io/docs/drivers/docker#deprecated-port_map-syntax
           port_map {
-            db = "${task.key}" # xxx should be task.value = ..
+            db = 5432 # xxx should be task.value = "${task.key}"
           }
 
           volumes = [
