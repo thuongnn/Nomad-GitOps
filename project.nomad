@@ -320,14 +320,8 @@ job "NOMAD_VAR_SLUG" {
 
         config {
           image = "docker.io/bitnami/postgresql:11.7.0-debian-10-r9"
-          # https://www.nomadproject.io/docs/drivers/docker#deprecated-port_map-syntax
-          #port_map {
-          #  db = 5432 # xxx should be task.value = "${task.key}"
-          #}
 
-          volumes = [
-            "/kv/${var.SLUG}:/kv",
-          ]
+          volumes = [ "/kv/${var.SLUG}:/kv" ]
 
           # setup needed DB env var and then do what the docker image would normally do
           entrypoint = [
@@ -381,6 +375,7 @@ job "NOMAD_VAR_SLUG" {
 
 
     # Optional add-on mysql/maria DB.  @see README.md for more details to enable.
+    # xxx this still needs a bit of work
     dynamic "task" {
       # task.key == DB port number
       # task.value == DB name like 'dbmy'
@@ -392,13 +387,12 @@ job "NOMAD_VAR_SLUG" {
 
         config {
           image = "bitnami/mariadb" # :10.3-debian-10
-          # https://www.nomadproject.io/docs/drivers/docker#deprecated-port_map-syntax
-          port_map {
-            dbmy = "${task.key}" # xxx should be task.value = ..
-          }
+
+          volumes = [ "/kv/${var.SLUG}:/kv" ]
         }
 
         template {
+          # xxx this still needs a bit of work
           data = <<EOH
 MARIADB_PASSWORD={{ file "/kv/${var.SLUG}/DB_PW" }}
 WORDPRESS_DATABASE_PASSWORD={{ file "/kv/${var.SLUG}/DB_PW" }}
