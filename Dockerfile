@@ -1,7 +1,9 @@
 # syntax = docker/dockerfile:1.0-experimental
 # https://docs.docker.com/develop/develop-images/build_enhancements/#overriding-default-frontends
 
-FROM node:slim
+
+# FROM node:slim # xxx
+FROM node
 
 # Add nomad
 RUN cd /usr/sbin  &&  \
