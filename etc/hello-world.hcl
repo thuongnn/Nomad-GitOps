@@ -19,40 +19,53 @@ variables {
   KUBE_INGRESS_BASE_DOMAIN = "x.archive.org"
 }
 
-# NOTE: "hello-world" below should really be "${var.CI_PROJECT_PATH_SLUG}-${var.CI_COMMIT_REF_SLUG}"
-# in all four locations.  But (job|group|task) ".."  can't interpolate vars yet in HCL v2.
+# NOTE: "hello-world" should really be "${var.CI_PROJECT_PATH_SLUG}-${var.CI_COMMIT_REF_SLUG}"
+#       but `job ".." {` can't interpolate vars/locals yet in HCL v2.
+locals {
+  job_names = [ "hello-world" ]
+ #job_names = [ "${var.CI_PROJECT_PATH_SLUG}-${var.CI_COMMIT_REF_SLUG}" ]
+}
+
 job "hello-world" {
   datacenters = ["dc1"]
-  group "hello-world" {
-    network {
-      port "http" {
-        to = 5000
+  dynamic "group" {
+    for_each = local.job_names
+    labels = ["${group.value}"]
+    content {
+      network {
+        port "http" {
+          to = 5000
+        }
       }
-    }
-    service {
-      name = "hello-world"
-      tags = ["urlprefix-${var.CI_PROJECT_PATH_SLUG}-${var.CI_COMMIT_REF_SLUG}.${var.KUBE_INGRESS_BASE_DOMAIN}:443/"]
-      port = "http"
-      check {
-        type     = "http"
-        port     = "http"
-        path     = "/"
-        interval = "10s"
-        timeout  = "2s"
+      service {
+        name = local.job_names[0]
+        tags = ["urlprefix-${var.CI_PROJECT_PATH_SLUG}-${var.CI_COMMIT_REF_SLUG}.${var.KUBE_INGRESS_BASE_DOMAIN}:443/"]
+        port = "http"
+        check {
+          type     = "http"
+          port     = "http"
+          path     = "/"
+          interval = "10s"
+          timeout  = "2s"
+        }
       }
-    }
-    task "hello-world" {
-      driver = "docker"
+      dynamic "task" {
+        for_each = local.job_names
+        labels = ["${task.value}"]
+        content {
+          driver = "docker"
 
-      config {
-        image = "${var.CI_REGISTRY_IMAGE}/${var.CI_COMMIT_REF_SLUG}:${var.CI_COMMIT_SHA}"
+          config {
+            image = "${var.CI_REGISTRY_IMAGE}/${var.CI_COMMIT_REF_SLUG}:${var.CI_COMMIT_SHA}"
 
-        ports = [ "http" ]
+            ports = [ "http" ]
 
-        auth {
-          server_address = "${var.CI_REGISTRY}"
-          username = "${var.CI_REGISTRY_USER}"
-          password = "${var.CI_REGISTRY_PASSWORD}"
+            auth {
+              server_address = "${var.CI_REGISTRY}"
+              username = "${var.CI_REGISTRY_USER}"
+              password = "${var.CI_REGISTRY_PASSWORD}"
+            }
+          }
         }
       }
     }
