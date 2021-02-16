@@ -33,24 +33,11 @@ include:
     - |
       BRANCH_PART=""
       [ "$CI_COMMIT_REF_SLUG" != "master" ]  &&  BRANCH_PART="-${CI_COMMIT_REF_SLUG}"
-      export NOMAD__SLUG=$(echo "${CI_PROJECT_PATH_SLUG}${BRANCH_PART}" |cut -b1-63)
 
-      DOM=${KUBE_INGRESS_BASE_DOMAIN}
-      [ "$NOMAD__HOSTNAME" = "" ]  &&  export NOMAD__HOSTNAME="${NOMAD__SLUG}.${DOM}"
+      export NOMAD_VAR_SLUG=$(echo "${CI_PROJECT_PATH_SLUG}${BRANCH_PART}" |cut -b1-63)
+      export NOMAD_VAR_HOSTNAME="${NOMAD_VAR_SLUG}.${KUBE_INGRESS_BASE_DOMAIN}"
 
-      # anything still using older NOMAD__VARIABLE_NAME style stick with hcl1 & levant for now
-      export HCL1=
-      tmp=$(env |egrep -c ^NOMAD__)
-      [ "$tmp" = "0" ]  &&  export HCL1=1
-
-      NOMARGS="-var-file=/tmp/env.json"
-      [ $HCL1 ]  &&  NOMARGS="-hcl1"
-
-      # For hcl2
-      export NOMAD_VAR_SLUG=$NOMAD__SLUG
-      export NOMAD_VAR_HOSTNAME=$NOMAD__HOSTNAME
       [ "$NOMAD_VAR_HOSTNAMES" = "" ]  &&  export NOMAD_VAR_HOSTNAMES='["'$NOMAD_VAR_HOSTNAME'"]'
-      echo NOMAD_VAR_HOSTNAMES=$NOMAD_VAR_HOSTNAMES
 
 
 deploy:
@@ -64,22 +51,17 @@ deploy:
     # this fully parameterized nice generic 'house style' project
     - if [ ! -e project.nomad ];then wget -q https://gitlab.com/internetarchive/nomad/-/raw/master/project.nomad; fi
 
-    # Swap out any env vars in `project.nomad` with environment values
-    - if [ $HCL1 ]; then node -e 'console.log(JSON.stringify(process.env))' >| /tmp/env.json; fi
-    - if [ $HCL1 ]; then levant render -var-file=/tmp/env.json  project.nomad 2>/dev/null >| project.hcl; fi
-
-    # Swap out any env var overrides to `project.hcl` with environment values
-    - if [ ! -e project.hcl ]; then wget -q https://gitlab.com/internetarchive/nomad/-/raw/master/project.hcl; fi
+    - cp project.nomad project.hcl
+    # Do the one current substitution nomad v1.0.3 can't do now (apparently a bug)
     - sed -i "s/NOMAD_VAR_SLUG/$NOMAD_VAR_SLUG/" project.hcl
+    # write an current env vars starting with "CI_" to a JSON env var file
     - node -e 'console.log(JSON.stringify(Object.fromEntries(Object.entries(process.env).filter(([k, v]) => k.startsWith("CI_")))))' >| /tmp/env.json
 
-    - grep -vi password project.hcl | egrep -v '^\s*$'
+    - nomad validate -var-file=/tmp/env.json project.hcl
+    - nomad plan     -var-file=/tmp/env.json project.hcl 2>&1 |sed 's/\(password[^ \t]*[ \t]*\).*/\1 ... /' || echo
+    - nomad run      -var-file=/tmp/env.json project.hcl
 
-    - nomad validate $NOMARGS  project.hcl
-    - nomad plan     $NOMARGS  project.hcl 2>&1 |sed 's/\(password[^ \t]*[ \t]*\).*/\1 ... /' || echo
-    - nomad run      $NOMARGS  project.hcl
-
-    - rm /tmp/env.json
+    - rm /tmp/v.json
 
     - echo deployed to https://$NOMAD_VAR_HOSTNAME
 
@@ -88,7 +70,7 @@ deploy:
     url: https://$NOMAD_VAR_HOSTNAME
     on_stop: stop_review
   rules:
-    - if: '$NOMAD_VAR_NO_DEPLOY || $NOMAD__NO_DEPLOY'
+    - if: '$NOMAD_VAR_NO_DEPLOY'
       when: never
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       when: never
@@ -112,7 +94,7 @@ stop_review:
   rules:
     - if: '$CI_COMMIT_BRANCH == "master"'
       when: never
-    - if: '$NOMAD_VAR_NO_DEPLOY || $NOMAD__NO_DEPLOY'
+    - if: '$NOMAD_VAR_NO_DEPLOY'
       when: never
     - if: '$CI_COMMIT_TAG || $CI_COMMIT_BRANCH'
       when: manual
