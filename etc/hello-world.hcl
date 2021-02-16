@@ -1,4 +1,5 @@
 # Minimal basic project using only GitLab CI/CD std. variables
+# Run like:   nomad run hello-world.hcl
 
 # Variables used below and their defaults if not set externally
 variables {
@@ -13,21 +14,23 @@ variables {
   CI_REGISTRY_USER = ""                                     # set for each pipeline and ..
   CI_REGISTRY_PASSWORD = ""                                 # .. allows pull from private registry
 
+  # Switch this, locally edit your /etc/hosts, or otherwise.  as is, webapp will appear at:
+  #   https://internetarchive-bai-master.x.archive.org/
   KUBE_INGRESS_BASE_DOMAIN = "x.archive.org"
 }
 
-# NOTE: "simple" below should really be "${var.CI_PROJECT_PATH_SLUG}-${var.CI_COMMIT_REF_SLUG}"
+# NOTE: "hello-world" below should really be "${var.CI_PROJECT_PATH_SLUG}-${var.CI_COMMIT_REF_SLUG}"
 # in all four locations.  But (job|group|task) ".."  can't interpolate vars yet in HCL v2.
-job "simple" {
+job "hello-world" {
   datacenters = ["dc1"]
-  group "simple" {
+  group "hello-world" {
     network {
       port "http" {
         to = 5000
       }
     }
     service {
-      name = "simple"
+      name = "hello-world"
       tags = ["urlprefix-${var.CI_PROJECT_PATH_SLUG}-${var.CI_COMMIT_REF_SLUG}.${var.KUBE_INGRESS_BASE_DOMAIN}:443/"]
       port = "http"
       check {
@@ -38,7 +41,7 @@ job "simple" {
         timeout  = "2s"
       }
     }
-    task "simple" {
+    task "hello-world" {
       driver = "docker"
 
       config {
