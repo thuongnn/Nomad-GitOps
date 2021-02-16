@@ -13,7 +13,7 @@ RUN cd /usr/sbin  &&  \
         const DST = 'nomad.zip'; \
         const request = https.get(URL, (resp) => resp.pipe(fs.createWriteStream(DST)))"  &&  \
     apt-get -yqq update  &&  \
-    apt-get -yqq --no-install-recommends install unzip ca-certificates  &&  \
+    apt-get -yqq --no-install-recommends install unzip ca-certificates wget  &&  \
     unzip    nomad.zip  &&  \
     rm       nomad.zip
 
