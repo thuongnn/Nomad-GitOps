@@ -61,7 +61,7 @@ deploy:
     - nomad plan     -var-file=/tmp/env.json project.hcl 2>&1 |sed 's/\(password[^ \t]*[ \t]*\).*/\1 ... /' || echo
     - nomad run      -var-file=/tmp/env.json project.hcl
 
-    - rm /tmp/v.json
+    - rm /tmp/env.json
 
     - echo deployed to https://$NOMAD_VAR_HOSTNAME
 
