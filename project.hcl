@@ -327,16 +327,9 @@ job "NOMAD_VAR_SLUG" {
 
           volumes = [
             "/kv/${var.SLUG}:/kv",
-            "/kv/${var.SLUG}:${NOMAD_SECRETS_DIR}/kv"
           ]
-        }
 
-        template {
-          data = <<EOH
-POSTGRESQL_PASSWORD={{ file "${NOMAD_SECRETS_DIR}/kv/DB_PW" }}
-EOH
-          destination = "secrets/file.env"
-          env         = true
+          command = "sh -c 'export POSTGRESQL_PASSWORD=$(cat /kv/DB_PW)  && && /entrypoint.sh /run.sh'"
         }
 
         service {
@@ -351,7 +344,7 @@ EOH
           }
 
           check {
-            # This posts containers bridge IP address (starting with "172.") into
+            # This posts container's bridge IP address (starting with "172.") into
             # an expected file that other docker container can reach this
             # DB docker container with.
             type     = "script"
@@ -427,7 +420,7 @@ EOH
           }
 
           check {
-            # This posts containers bridge IP address (starting with "172.") into
+            # This posts container's bridge IP address (starting with "172.") into
             # an expected file that other docker container can reach this
             # DB docker container with.
             type     = "script"
