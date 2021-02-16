@@ -11,6 +11,8 @@ RUN cd /usr/sbin  &&  \
         const URL = 'https://releases.hashicorp.com/nomad/1.0.3/nomad_1.0.3_linux_amd64.zip'; \
         const DST = 'nomad.zip'; \
         const request = https.get(URL, (resp) => resp.pipe(fs.createWriteStream(DST)))"  &&  \
+    apt-get -yqq update  &&  \
+    apt-get -yqq --no-install-recommends install unzip  &&  \
     unzip    nomad.zip  &&  \
     rm       nomad.zip
 
