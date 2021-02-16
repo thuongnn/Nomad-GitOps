@@ -329,7 +329,8 @@ job "NOMAD_VAR_SLUG" {
             "/kv/${var.SLUG}:/kv",
           ]
 
-          command = "sh -c 'export POSTGRESQL_PASSWORD=$(cat /kv/DB_PW)  && && /entrypoint.sh /run.sh'"
+          # setup needed DB env var and then do what the docker image would normally do
+          command = "sh -c 'export POSTGRESQL_PASSWORD=$(cat /kv/DB_PW)  &&  /entrypoint.sh /run.sh'"
         }
 
         service {
