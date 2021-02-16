@@ -375,7 +375,6 @@ job "NOMAD_VAR_SLUG" {
 
 
     # Optional add-on mysql/maria DB.  @see README.md for more details to enable.
-    # xxx this still needs a bit of work
     dynamic "task" {
       # task.key == DB port number
       # task.value == DB name like 'dbmy'
@@ -389,16 +388,14 @@ job "NOMAD_VAR_SLUG" {
           image = "bitnami/mariadb" # :10.3-debian-10
 
           volumes = [ "/kv/${var.SLUG}:/kv" ]
-        }
 
-        template {
-          # xxx this still needs a bit of work
-          data = <<EOH
-MARIADB_PASSWORD={{ file "/kv/${var.SLUG}/DB_PW" }}
-WORDPRESS_DATABASE_PASSWORD={{ file "/kv/${var.SLUG}/DB_PW" }}
-EOH
-          destination = "secrets/file.env"
-          env         = true
+          # setup needed DB env var and then do what the docker image would normally do
+          # https://github.com/bitnami/bitnami-docker-mariadb/blob/master/10.3/debian-10/Dockerfile
+          entrypoint = [
+            "/bin/sh", "-c",
+            "export MARIADB_PASSWORD=$(cat /kv/DB_PW)  WORDPRESS_DATABASE_PASSWORD=$(cat /kv/DB_PW)  &&  /opt/bitnami/scripts/mariadb/entrypoint.sh /opt/bitnami/scripts/mariadb/run.sh"
+          ]
+          command = "echo customized entrypoint used"
         }
 
         env {
