@@ -8,8 +8,8 @@ variables {
   CI_COMMIT_REF_SLUG = "master"                             # branch name, slugged
   CI_COMMIT_SHA = "latest"                                  # repo's commit for current pipline
   CI_PROJECT_PATH_SLUG = "internetarchive-bai"              # repo and group it is part of, slugged
-  CI_REGISTRY_USER = "comes-from-gitlab"                    # set for each pipeline and ..
-  CI_REGISTRY_PASSWORD = "12345-from-spaceballs"            # .. allows pull from private registry
+  CI_REGISTRY_USER = ""                                     # set for each pipeline and ..
+  CI_REGISTRY_PASSWORD = ""                                 # .. allows pull from private registry
   # optional (but suggested!) CI/CD group or project vars:
   CI_R2_USER = ""                                           # optional more reliable alternative ..
   CI_R2_PASS = ""                                           # .. to 1st user/pass (see README.md)
