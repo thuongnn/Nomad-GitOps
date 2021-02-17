@@ -8,7 +8,7 @@
 
 
 # NOTE: very first pipeline, the [build] below will make sure this is created
-image: registry.gitlab.com/internetarchive/nomad/master:latest
+image: registry.gitlab.com/internetarchive/nomad/master
 
 
 stages:
