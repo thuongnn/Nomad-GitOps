@@ -167,7 +167,7 @@ Requirements:
 - set environment variables in your project's `.gitlab-ci.yml`:
   - `NOMAD_VAR_PG`
   - `NOMAD_VAR_PV_DB`
-- Insert `DB_PW` value into `/kv/[NOMAD_VAR_SLUG]/DB_PW` on your nomad hosts
+- Insert `DB_PW` value into `/kv/${NOMAD_VAR_SLUG}/DB_PW` on your nomad hosts
 - install `jq` package via your `Dockerfile`
 - Your main/webapp container can slip this in to it's `Dockerfile`'s `CMD` line to setup DB access.
   NOTE: The sleep should ensure `/alloc/data/*-db.ip` file gets created by DB Task 1st healthcheck
@@ -184,7 +184,7 @@ Requirements:
   - `NOMAD_VAR_MYSQL`
   - `NOMAD_VAR_PV`
   - `NOMAD_VAR_PV_DB`
-- Insert `DB_PW` value into `/kv/[NOMAD_VAR_SLUG]/DB_PW` on your nomad hosts
+- Insert `DB_PW` value into `/kv/${NOMAD_VAR_SLUG}/DB_PW` on your nomad hosts
 - Your main/webapp container can slip this in to it's `Dockerfile`'s `CMD` line to setup DB access.
   NOTE: The sleep should ensure `/alloc/data/*-db.ip` file gets created by DB Task 1st healthcheck
   which the webapp Task (above) can read.

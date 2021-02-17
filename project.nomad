@@ -100,6 +100,8 @@ variable "MYSQL" {
 
 locals {
   # Ignore all this.  really :)
+  job_names = [ "${var.SLUG}" ]
+
   # Too convoluted -- but remove map key/val for the port 5000
   # get numeric sort to work right by 0-padding to 5 digits so that keys() returns like: [x, y, 5000]
   ports_sorted = "${zipmap(formatlist("%05d", keys(var.PORTS)), values(var.PORTS))}"
@@ -116,79 +118,57 @@ locals {
 job "NOMAD_VAR_SLUG" {
   datacenters = ["dc1"]
 
-  group "NOMAD_VAR_SLUG" {
-    count = var.COUNT
+  dynamic "group" {
+    for_each = local.job_names
+    labels = ["${group.value}"]
+    content {
+      count = var.COUNT
 
-    update {
-      # https://learn.hashicorp.com/tutorials/nomad/job-rolling-update
-      max_parallel  = 1
-      min_healthy_time  = "30s"
-      healthy_deadline  = "5m"
-      progress_deadline = "10m"
-      auto_revert   = true
-    }
-    restart {
-      attempts = 3
-      delay    = "15s"
-      interval = "30m"
-      mode     = "fail"
-    }
-    network {
-      dynamic "port" {
-        # port.key == portnumber
-        # port.value == portname
-        for_each = merge(var.PORTS, var.PG, var.MYSQL, {})
-        labels = [ "${port.value}" ]
-        content {
-          to = port.key
+      update {
+        # https://learn.hashicorp.com/tutorials/nomad/job-rolling-update
+        max_parallel  = 1
+        min_healthy_time  = "30s"
+        healthy_deadline  = "5m"
+        progress_deadline = "10m"
+        auto_revert   = true
+      }
+      restart {
+        attempts = 3
+        delay    = "15s"
+        interval = "30m"
+        mode     = "fail"
+      }
+      network {
+        dynamic "port" {
+          # port.key == portnumber
+          # port.value == portname
+          for_each = merge(var.PORTS, var.PG, var.MYSQL, {})
+          labels = [ "${port.value}" ]
+          content {
+            to = port.key
+          }
         }
       }
-    }
 
 
-    # The "service" stanza instructs Nomad to register this task as a service
-    # in the service discovery engine, which is currently Consul. This will
-    # make the service addressable after Nomad has placed it on a host and
-    # port.
-    #
-    # For more information and examples on the "service" stanza, please see
-    # the online documentation at:
-    #
-    #     https://www.nomadproject.io/docs/job-specification/service.html
-    #
-    service {
-      name = "${var.SLUG}"
-      # second line automatically redirects any http traffic to https
-      tags = concat([for HOST in var.HOSTNAMES :
-        "urlprefix-${HOST}:443/"], [for HOST in var.HOSTNAMES :
-        "urlprefix-${HOST}:80/ redirect=308,https://${HOST}/"])
+      # The "service" stanza instructs Nomad to register this task as a service
+      # in the service discovery engine, which is currently Consul. This will
+      # make the service addressable after Nomad has placed it on a host and
+      # port.
+      #
+      # For more information and examples on the "service" stanza, please see
+      # the online documentation at:
+      #
+      #     https://www.nomadproject.io/docs/job-specification/service.html
+      #
+      service {
+        name = "${var.SLUG}"
+        # second line automatically redirects any http traffic to https
+        tags = concat([for HOST in var.HOSTNAMES :
+          "urlprefix-${HOST}:443/"], [for HOST in var.HOSTNAMES :
+          "urlprefix-${HOST}:80/ redirect=308,https://${HOST}/"])
 
-      port = "http"
-      check {
-        name     = "alive"
-        type     = "${var.CHECK_PROTOCOL}"
-        port     = "http"
-        path     = "/"
-        interval = "10s"
-        timeout  = "2s"
-        check_restart {
-          limit = 3  # auto-restart task when healthcheck fails 3x in a row
-
-          # give container (eg: having issues) custom time amount to stay up for debugging before
-          # 1st health check (eg: "3600s" value would be 1hr)
-          grace = "${var.HEALTH_TIMEOUT}"
-        }
-      }
-    }
-
-    dynamic "service" {
-      for_each = local.ports_not_5000
-      content {
-        # service.key == portnumber
-        # service.value == portname
-        name = "${var.SLUG}-${service.value}"
-        tags = ["urlprefix-${var.HOSTNAMES[0]}:${service.key}/"]
-        port = "${service.value}"
+        port = "http"
         check {
           name     = "alive"
           type     = "${var.CHECK_PROTOCOL}"
@@ -196,256 +176,285 @@ job "NOMAD_VAR_SLUG" {
           path     = "/"
           interval = "10s"
           timeout  = "2s"
+          check_restart {
+            limit = 3  # auto-restart task when healthcheck fails 3x in a row
+
+            # give container (eg: having issues) custom time amount to stay up for debugging before
+            # 1st health check (eg: "3600s" value would be 1hr)
+            grace = "${var.HEALTH_TIMEOUT}"
+          }
         }
       }
-    }
 
-
-    task "NOMAD_VAR_SLUG" {
-      driver = "docker"
-
-      config {
-        image = "${var.CI_REGISTRY_IMAGE}/${var.CI_COMMIT_REF_SLUG}:${var.CI_COMMIT_SHA}"
-
-        auth {
-          # GitLab docker login user/pass are pretty unstable.  If admin has set `..R2..` keys in
-          # the group [Settings] [CI/CD] [Variables] - then use deploy token-based alternatives.
-          server_address = "${var.CI_REGISTRY}"
-
-          # Effectively use CI_R2_* variant if set; else use CI_REGISTRY_* PAIR
-          username = element([for s in [var.CI_R2_USER, var.CI_REGISTRY_USER] : s if s != ""], 0)
-          password = element([for s in [var.CI_R2_PASS, var.CI_REGISTRY_PASSWORD] : s if s != ""], 0)
+      dynamic "service" {
+        for_each = local.ports_not_5000
+        content {
+          # service.key == portnumber
+          # service.value == portname
+          name = "${var.SLUG}-${service.value}"
+          tags = ["urlprefix-${var.HOSTNAMES[0]}:${service.key}/"]
+          port = "${service.value}"
+          check {
+            name     = "alive"
+            type     = "${var.CHECK_PROTOCOL}"
+            port     = "http"
+            path     = "/"
+            interval = "10s"
+            timeout  = "2s"
+          }
         }
-
-        ports = [for portnumber, portname in var.PORTS : portname]
-
-        volumes = [
-          "/kv/${var.SLUG}:/kv"
-        ]
-
-        # The MEMORY var now becomes a **soft limit**
-        # We will 10x that for a **hard limit**
-        memory_hard_limit = "${var.MEMORY * 10}"
-
-        mounts = [{
-          type = "bind"
-          readonly = true
-          source = "${var.BIND_MOUNTS[0]}"
-          target = "${var.BIND_MOUNTS[0]}"
-        }, {
-          type = "bind"
-          readonly = true
-          source = "${var.BIND_MOUNTS[1]}"
-          target = "${var.BIND_MOUNTS[1]}"
-        }]
-      }
-
-      resources {
-        memory = "${var.MEMORY}"
-        cpu    = "${var.CPU}"
       }
 
 
-      dynamic "volume_mount" {
+      dynamic "task" {
+        for_each = local.job_names
+        labels = ["${task.value}"]
+        content {
+          driver = "docker"
+
+          config {
+            image = "${var.CI_REGISTRY_IMAGE}/${var.CI_COMMIT_REF_SLUG}:${var.CI_COMMIT_SHA}"
+
+            auth {
+              # GitLab docker login user/pass are pretty unstable.  If admin has set `..R2..` keys in
+              # the group [Settings] [CI/CD] [Variables] - then use deploy token-based alternatives.
+              server_address = "${var.CI_REGISTRY}"
+
+              # Effectively use CI_R2_* variant if set; else use CI_REGISTRY_* PAIR
+              username = element([for s in [var.CI_R2_USER, var.CI_REGISTRY_USER] : s if s != ""], 0)
+              password = element([for s in [var.CI_R2_PASS, var.CI_REGISTRY_PASSWORD] : s if s != ""], 0)
+            }
+
+            ports = [for portnumber, portname in var.PORTS : portname]
+
+            volumes = [
+              "/kv/${var.SLUG}:/kv"
+            ]
+
+            # The MEMORY var now becomes a **soft limit**
+            # We will 10x that for a **hard limit**
+            memory_hard_limit = "${var.MEMORY * 10}"
+
+            mounts = [{
+              type = "bind"
+              readonly = true
+              source = "${var.BIND_MOUNTS[0]}"
+              target = "${var.BIND_MOUNTS[0]}"
+            }, {
+              type = "bind"
+              readonly = true
+              source = "${var.BIND_MOUNTS[1]}"
+              target = "${var.BIND_MOUNTS[1]}"
+            }]
+          }
+
+          resources {
+            memory = "${var.MEMORY}"
+            cpu    = "${var.CPU}"
+          }
+
+
+          dynamic "volume_mount" {
+            for_each = setintersection([var.HOME], ["ro"])
+            content {
+              volume      = "home-${volume_mount.key}"
+              destination = "/home"
+              read_only   = true
+            }
+          }
+          dynamic "volume_mount" {
+            for_each = setintersection([var.HOME], ["rw"])
+            content {
+              volume      = "home-${volume_mount.key}"
+              destination = "/home"
+              read_only   = false
+            }
+          }
+
+          dynamic "volume_mount" {
+            # volume_mount.key == slot, eg: "/pv3"
+            # volume_mount.value == dest dir, eg: "/pv" or "/bitnami/wordpress"
+            for_each = local.pvs
+            content {
+              volume      = "${volume_mount.key}"
+              destination = "${volume_mount.value}"
+              read_only   = false
+            }
+          }
+        }
+      } # end dynamic "task"
+
+
+      dynamic "volume" {
         for_each = setintersection([var.HOME], ["ro"])
+        labels = [ "home-${volume.key}" ]
         content {
-          volume      = "home-${volume_mount.key}"
-          destination = "/home"
-          read_only   = true
+          type      = "host"
+          source    = "home-${volume.key}"
+          read_only = true
         }
       }
-      dynamic "volume_mount" {
+      dynamic "volume" {
         for_each = setintersection([var.HOME], ["rw"])
+        labels = [ "home-${volume.key}" ]
         content {
-          volume      = "home-${volume_mount.key}"
-          destination = "/home"
-          read_only   = false
+          type      = "host"
+          source    = "home-${volume.key}"
+          read_only = false
         }
       }
 
-      dynamic "volume_mount" {
-        # volume_mount.key == slot, eg: "/pv3"
-        # volume_mount.value == dest dir, eg: "/pv" or "/bitnami/wordpress"
+      dynamic "volume" {
+        # volume.key == slot, eg: "/pv3"
+        # volume.value == dest dir, eg: "/pv" or "/bitnami/wordpress"
+        labels = [ volume.key ]
         for_each = local.pvs
         content {
-          volume      = "${volume_mount.key}"
-          destination = "${volume_mount.value}"
-          read_only   = false
+          type      = "host"
+          read_only = false
+          source    = "${volume.key}"
         }
       }
-    } # end task
 
 
-    dynamic "volume" {
-      for_each = setintersection([var.HOME], ["ro"])
-      labels = [ "home-${volume.key}" ]
-      content {
-        type      = "host"
-        source    = "home-${volume.key}"
-        read_only = true
-      }
+
+      # Optional add-on postgres DB.  @see README.md for more details to enable.
+      dynamic "task" {
+        # task.key == DB port number
+        # task.value == DB name like 'db'
+        for_each = var.PG
+        labels = ["${var.SLUG}-db"]
+        content {
+          driver = "docker"
+
+          config {
+            image = "docker.io/bitnami/postgresql:11.7.0-debian-10-r9"
+
+            volumes = [ "/kv/${var.SLUG}:/kv" ]
+
+            # setup needed DB env var and then do what the docker image would normally do
+            entrypoint = [
+              "/bin/sh", "-c",
+              "export POSTGRESQL_PASSWORD=$(cat /kv/DB_PW) && /entrypoint.sh /run.sh"
+            ]
+            command = "echo customized entrypoint used"
+          }
+
+          service {
+            name = "${var.SLUG}-db"
+            port = "${task.value}"
+
+            check {
+              expose   = true
+              type     = "tcp"
+              interval = "2s"
+              timeout  = "2s"
+            }
+
+            check {
+              # This posts container's bridge IP address (starting with "172.") into
+              # an expected file that other docker container can reach this
+              # DB docker container with.
+              type     = "script"
+              name     = "setup"
+              command  = "/bin/sh"
+              args     = ["-c", "hostname -i |tee /alloc/data/${var.CI_PROJECT_PATH_SLUG}-db.ip"]
+              interval = "1h"
+              timeout  = "10s"
+            }
+
+            check {
+              type     = "script"
+              name     = "db-ready"
+              command  = "/usr/bin/pg_isready"
+              args     = ["-Upostgres", "-h", "127.0.0.1", "-p", "${task.key}"]
+              interval = "10s"
+              timeout  = "10s"
+            }
+          } # end service
+
+          volume_mount {
+            volume      = "${element(keys(var.PV_DB), 0)}"
+            destination = "${element(values(var.PV_DB), 0)}"
+            read_only   = false
+          }
+        } # end content
+      } # end dynamic "task"
+
+
+
+      # Optional add-on mysql/maria DB.  @see README.md for more details to enable.
+      dynamic "task" {
+        # task.key == DB port number
+        # task.value == DB name like 'dbmy'
+        for_each = var.MYSQL
+        labels = ["${var.SLUG}-db"]
+        content {
+          # https://github.com/bitnami/bitnami-docker-wordpress
+          driver = "docker"
+
+          config {
+            image = "bitnami/mariadb" # :10.3-debian-10
+
+            volumes = [ "/kv/${var.SLUG}:/kv" ]
+
+            # setup needed DB env var and then do what the docker image would normally do
+            # https://github.com/bitnami/bitnami-docker-mariadb/blob/master/10.3/debian-10/Dockerfile
+            entrypoint = [
+              "/bin/sh", "-c",
+              "export MARIADB_PASSWORD=$(cat /kv/DB_PW)  WORDPRESS_DATABASE_PASSWORD=$(cat /kv/DB_PW)  &&  /opt/bitnami/scripts/mariadb/entrypoint.sh /opt/bitnami/scripts/mariadb/run.sh"
+            ]
+            command = "echo customized entrypoint used"
+          }
+
+          env {
+            MARIADB_USER = "bn_wordpress"
+            MARIADB_DATABASE = "bitnami_wordpress"
+            ALLOW_EMPTY_PASSWORD = "yes"
+          }
+
+          service {
+            name = "${var.SLUG}-db"
+            port = "${task.value}"
+
+            check {
+              expose   = true
+              type     = "tcp"
+              interval = "2s"
+              timeout  = "2s"
+            }
+
+            check {
+              # This posts container's bridge IP address (starting with "172.") into
+              # an expected file that other docker container can reach this
+              # DB docker container with.
+              type     = "script"
+              name     = "setup"
+              command  = "/bin/sh"
+              args     = ["-c", "hostname -i |tee /alloc/data/${var.CI_PROJECT_PATH_SLUG}-db.ip"]
+              interval = "1h"
+              timeout  = "10s"
+            }
+
+            check {
+              type     = "script"
+              name     = "db-ping"
+              command  = "/opt/bitnami/mariadb/bin/mysqladmin"
+              args     = ["ping", "silent"]
+              interval = "10s"
+              timeout  = "10s"
+            }
+          } # end service
+
+          volume_mount {
+            volume      = "${element(keys(var.PV_DB), 0)}"
+            destination = "${element(values(var.PV_DB), 0)}"
+            read_only   = false
+          }
+        } # end content
+      } # end dynamic "task"
     }
-    dynamic "volume" {
-      for_each = setintersection([var.HOME], ["rw"])
-      labels = [ "home-${volume.key}" ]
-      content {
-        type      = "host"
-        source    = "home-${volume.key}"
-        read_only = false
-      }
-    }
-
-    dynamic "volume" {
-      # volume.key == slot, eg: "/pv3"
-      # volume.value == dest dir, eg: "/pv" or "/bitnami/wordpress"
-      labels = [ volume.key ]
-      for_each = local.pvs
-      content {
-        type      = "host"
-        read_only = false
-        source    = "${volume.key}"
-      }
-    }
-
-
-
-    # Optional add-on postgres DB.  @see README.md for more details to enable.
-    dynamic "task" {
-      # task.key == DB port number
-      # task.value == DB name like 'db'
-      for_each = var.PG
-      labels = ["${var.SLUG}-db"]
-      content {
-        driver = "docker"
-
-        config {
-          image = "docker.io/bitnami/postgresql:11.7.0-debian-10-r9"
-
-          volumes = [ "/kv/${var.SLUG}:/kv" ]
-
-          # setup needed DB env var and then do what the docker image would normally do
-          entrypoint = [
-            "/bin/sh", "-c",
-            "export POSTGRESQL_PASSWORD=$(cat /kv/DB_PW) && /entrypoint.sh /run.sh"
-          ]
-          command = "echo customized entrypoint used"
-        }
-
-        service {
-          name = "${var.SLUG}-db"
-          port = "${task.value}"
-
-          check {
-            expose   = true
-            type     = "tcp"
-            interval = "2s"
-            timeout  = "2s"
-          }
-
-          check {
-            # This posts container's bridge IP address (starting with "172.") into
-            # an expected file that other docker container can reach this
-            # DB docker container with.
-            type     = "script"
-            name     = "setup"
-            command  = "/bin/sh"
-            args     = ["-c", "hostname -i |tee /alloc/data/${var.CI_PROJECT_PATH_SLUG}-db.ip"]
-            interval = "1h"
-            timeout  = "10s"
-          }
-
-          check {
-            type     = "script"
-            name     = "db-ready"
-            command  = "/usr/bin/pg_isready"
-            args     = ["-Upostgres", "-h", "127.0.0.1", "-p", "${task.key}"]
-            interval = "10s"
-            timeout  = "10s"
-          }
-        } # end service
-
-        volume_mount {
-          volume      = "${element(keys(var.PV_DB), 0)}"
-          destination = "${element(values(var.PV_DB), 0)}"
-          read_only   = false
-        }
-      } # end content
-    } # end dynamic "task"
-
-
-
-    # Optional add-on mysql/maria DB.  @see README.md for more details to enable.
-    dynamic "task" {
-      # task.key == DB port number
-      # task.value == DB name like 'dbmy'
-      for_each = var.MYSQL
-      labels = ["${var.SLUG}-db"]
-      content {
-        # https://github.com/bitnami/bitnami-docker-wordpress
-        driver = "docker"
-
-        config {
-          image = "bitnami/mariadb" # :10.3-debian-10
-
-          volumes = [ "/kv/${var.SLUG}:/kv" ]
-
-          # setup needed DB env var and then do what the docker image would normally do
-          # https://github.com/bitnami/bitnami-docker-mariadb/blob/master/10.3/debian-10/Dockerfile
-          entrypoint = [
-            "/bin/sh", "-c",
-            "export MARIADB_PASSWORD=$(cat /kv/DB_PW)  WORDPRESS_DATABASE_PASSWORD=$(cat /kv/DB_PW)  &&  /opt/bitnami/scripts/mariadb/entrypoint.sh /opt/bitnami/scripts/mariadb/run.sh"
-          ]
-          command = "echo customized entrypoint used"
-        }
-
-        env {
-          MARIADB_USER = "bn_wordpress"
-          MARIADB_DATABASE = "bitnami_wordpress"
-          ALLOW_EMPTY_PASSWORD = "yes"
-        }
-
-        service {
-          name = "${var.SLUG}-db"
-          port = "${task.value}"
-
-          check {
-            expose   = true
-            type     = "tcp"
-            interval = "2s"
-            timeout  = "2s"
-          }
-
-          check {
-            # This posts container's bridge IP address (starting with "172.") into
-            # an expected file that other docker container can reach this
-            # DB docker container with.
-            type     = "script"
-            name     = "setup"
-            command  = "/bin/sh"
-            args     = ["-c", "hostname -i |tee /alloc/data/${var.CI_PROJECT_PATH_SLUG}-db.ip"]
-            interval = "1h"
-            timeout  = "10s"
-          }
-
-          check {
-            type     = "script"
-            name     = "db-ping"
-            command  = "/opt/bitnami/mariadb/bin/mysqladmin"
-            args     = ["ping", "silent"]
-            interval = "10s"
-            timeout  = "10s"
-          }
-        } # end service
-
-        volume_mount {
-          volume      = "${element(keys(var.PV_DB), 0)}"
-          destination = "${element(values(var.PV_DB), 0)}"
-          read_only   = false
-        }
-      } # end content
-    } # end dynamic "task"
-
-  } # end group
+  } # end dynamic "group"
 
 
   migrate {
