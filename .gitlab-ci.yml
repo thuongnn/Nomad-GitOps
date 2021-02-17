@@ -30,14 +30,11 @@ include:
     #   services-timemachine.x.archive.org
     #   ia-petabox-webdev-3939-fix-things.x.archive.org
     # and a unique slug that factors in group, project, and branch (when not master)
-    - |
-      BRANCH_PART=""
-      [ "$CI_COMMIT_REF_SLUG" != "master" ]  &&  BRANCH_PART="-${CI_COMMIT_REF_SLUG}"
-
-      export NOMAD_VAR_SLUG=$(echo "${CI_PROJECT_PATH_SLUG}${BRANCH_PART}" |cut -b1-63)
-      export NOMAD_VAR_HOSTNAME="${NOMAD_VAR_SLUG}.${KUBE_INGRESS_BASE_DOMAIN}"
-
-      [ "$NOMAD_VAR_HOSTNAMES" = "" ]  &&  export NOMAD_VAR_HOSTNAMES='["'$NOMAD_VAR_HOSTNAME'"]'
+    - export BRANCH_PART=""
+    - if [ "$CI_COMMIT_REF_SLUG" != "master" ]; then export BRANCH_PART="-${CI_COMMIT_REF_SLUG}"; fi
+    - export NOMAD_VAR_SLUG=$(echo "${CI_PROJECT_PATH_SLUG}${BRANCH_PART}" |cut -b1-63)
+    - export NOMAD_VAR_HOSTNAME="${NOMAD_VAR_SLUG}.${KUBE_INGRESS_BASE_DOMAIN}"
+    - if [ "$NOMAD_VAR_HOSTNAMES" = "" ]; then export NOMAD_VAR_HOSTNAMES='["'$NOMAD_VAR_HOSTNAME'"]'; fi
 
 
 deploy:
@@ -54,7 +51,7 @@ deploy:
     - cp project.nomad project.hcl
     # Do the one current substitution nomad v1.0.3 can't do now (apparently a bug)
     - sed -i "s/NOMAD_VAR_SLUG/$NOMAD_VAR_SLUG/" project.hcl
-    # write an current env vars starting with "CI_" to a JSON env var file
+    # write current env vars starting with "CI_" to a JSON env var file
     - node -e 'console.log(JSON.stringify(Object.fromEntries(Object.entries(process.env).filter(([k, v]) => k.startsWith("CI_")))))' >| /tmp/env.json
 
     - nomad validate -var-file=/tmp/env.json project.hcl
