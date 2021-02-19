@@ -18,7 +18,7 @@ sudo docker run --rm -it \
   -v /srv/gitlab-runner/config:/etc/gitlab-runner \
   gitlab/gitlab-runner -- register \
   --executor docker \
-  --docker-image "docker:19.03.11" \
+  --docker-image docker \
   --docker-volumes /var/run/docker.sock:/var/run/docker.sock
 # fill in your remaining answers...
 
