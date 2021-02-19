@@ -28,7 +28,7 @@ include:
 ```yaml
 test:
   stage: test
-  image: ${CI_REGISTRY_IMAGE}/${CI_COMMIT_REF_NAME}:${CI_COMMIT_SHA}
+  image: ${CI_REGISTRY_IMAGE}/${CI_COMMIT_REF_SLUG}:${CI_COMMIT_SHA}
   script:
     - cd /app   # or wherever in your image
     - npm test  # or whatever your test scripts/steps are
