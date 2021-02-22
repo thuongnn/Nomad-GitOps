@@ -16,27 +16,28 @@ TLS_DOMAIN=$1
 # This part is pretty slow, so let's do all the slow setup and save it for reuse.
 # You can `sudo docker rmi certomatic` later as desired
 sudo docker run -it --rm certomatic echo  || (
-  sudo docker run -it --name certomatic ubuntu:bionic bash -c "
-    apt-get -yqq update  && \
-    apt-get -yqq install git  && \
-    cd /opt  && \
-    git clone https://github.com/certbot/certbot
-    cd /opt/certbot
-    ./certbot-auto --install-only
-  "
+  sudo docker run -it --name certomatic ubuntu:rolling bash -c '
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get -yqq update
+    apt-get -yqq install  certbot
+  '
   sudo docker commit certomatic certomatic
   sudo docker rm -v  certomatic
 )
 
-mkdir -p -m777 certs
-sudo docker run -it --rm -v $(pwd)/certs:/x certomatic bash -c "
-  cd /opt/certbot
-  echo c | ./certbot-auto
 
-  ./certbot-auto certonly --manual --preferred-challenges=dns --server https://acme-v02.api.letsencrypt.org/directory  -d '*.${TLS_DOMAIN?}'
+sudo touch     ${TLS_DOMAIN?}-{cert,key}.pem
+sudo chmod 666 ${TLS_DOMAIN?}-{cert,key}.pem
 
-
+sudo docker run -it --rm -v $(pwd):/x  certomatic  bash -c "
+  certbot certonly --manual --manual-public-ip-logging-ok --preferred-challenges dns-01 \
+    --server https://acme-v02.api.letsencrypt.org/directory -d '*.${TLS_DOMAIN?}'
+  set -x
   cd /etc/letsencrypt/live/*/
   cp -p fullchain.pem /x/${TLS_DOMAIN?}-cert.pem
   cp -p privkey.pem   /x/${TLS_DOMAIN?}-key.pem
+  echo 'type exit to finish'
+  bash
 "
+sudo chmod 444 ${TLS_DOMAIN?}-cert.pem
+sudo chmod 400 ${TLS_DOMAIN?}-key.pem
