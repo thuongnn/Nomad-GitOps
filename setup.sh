@@ -46,8 +46,48 @@ unset   NOMAD_TOKEN
 unset  CONSUL_TOKEN
 
 
+function hind() {
+  #xxx add hind.x.. to /etc/hosts
+  #xxx mkdir -p /opt/nomad/data/alloc
+  #xxx add  /opt/nomad/data/alloc  to docker resources file sharing
+  DOM=x.archive.org
+  HO=hind.$DOM
+  TLSD=$HOME/gitlab/tls
+  HINDMAC=1
+
+  DOM=test.archive.org
+  HO=hind.$DOM
+  TLSD=$HOME/dev/nomad/certs
+  HINDMAC=
+
+# xxx
+# echo '{ "storage-driver": "overlay2" }' >| /etc/docker/daemon.json
+
+#    --net=host  \
+# -v /var/run/docker.sock:/var/run/docker.sock  \
+# -v /etc/fabio:/etc/fabio  \
+
+  ssh home sudo chmod 444 ${TLSD?}/${DOM?}-key.pem # xxx FFS
+  sudo docker run --rm -it --name hind  \
+    --privileged  \
+    --hostname ${HO?}  \
+    -p 4646:4646  \
+    -v $HOME/dev/nomad:/app  \
+    -v ${TLSD}:/tls  \
+    ubuntu:rolling bash -c "
+  apt-get -yqq update  &&  apt-get -yqq --no-install-recommends install \
+    zsh  sudo  rsync  dnsutils  supervisor;
+  cd /app;
+  /app/setup.sh /tls/${DOM?}-cert.pem /tls/${DOM?}-key.pem;
+  zsh
+  "
+  ssh home sudo chmod 400 ${TLSD?}/${DOM?}-key.pem # xxx FFS
+}
+
 function main() {
-  if [ "$1" = "baseline"  -o  "$1" = "customize"  -o  "$1" = "customize2" ]; then
+  if [ "$1" = "hind" ]; then
+    hind
+  elif [ "$1" = "baseline"  -o  "$1" = "customize"  -o  "$1" = "customize2" ]; then
     set -x
     FIRST=$2
     COUNT=$3
@@ -58,7 +98,6 @@ function main() {
     "$1"
     exit 0
   else
-    FIRST=$(hostname -f)
     TLS_CRT=$1  # @see create-https-certs.sh - fully qualified path to crt file it created
     TLS_KEY=$2  # @see create-https-certs.sh - fully qualified path to key file it created
     shift
@@ -66,10 +105,11 @@ function main() {
     CLUSTER_SIZE=$#
     shift
     typeset -a $NODES
-    NODES=( $FIRST "$@" )
 
     set -x
     config
+
+    NODES=( ${FIRST?} "$@" )
 
     # use the TLS_CRT and TLS_KEY params
     ( COUNT=0 setup-certs )
@@ -85,6 +125,19 @@ function main() {
 
 
 function config() {
+  export HIND=
+  [ -e /.dockerenv ]  &&  export HIND=1
+
+
+  if [ ! $FIRST ]; then
+    if [ $HIND ]; then
+      local DOM=$(echo $(basename "${TLS_KEY?}") |perl -pe 's/\-key\.pem$//')
+      FIRST=hind.$DOM
+    else
+      FIRST=$(hostname -f)
+    fi
+  fi
+
   export NOMAD_COUNT=${CLUSTER_SIZE?}
   export CONSUL_COUNT=${CLUSTER_SIZE?}
 
@@ -97,6 +150,10 @@ function config() {
   export  FABIO_ADDR="http://localhost:9998"
   export MAX_PV=20
   export FIRSTIP=$(host ${FIRST?} | perl -ane 'print $F[3] if $F[2] eq "address"')
+  export SCTL=systemctl
+
+  [ $HINDMAC ]  &&  export FIRSTIP=localhost # xxx
+  [ $HIND ]  &&  export SCTL=supervisorctl
 
   # find daemon config files
    NOMAD_HCL=$(dpkg -L nomad  2>/dev/null |egrep ^/etc/ |egrep -m1 '\.hcl$' || echo -n '')
@@ -104,11 +161,24 @@ function config() {
 }
 
 
+function run-on() {
+  NODE="$1"
+  shift
+  CMD="$@"
+
+  if [ $HIND ]; then
+    bash -c "$CMD"
+  else
+    ssh $NODE "$CMD"
+  fi
+}
+
+
 function add-nodes() {
   # install & setup stock nomad & consul
   COUNT=${INITIAL_CLUSTER_SIZE?}
   for NODE in ${NODES?}; do
-    ( set -x; ssh $NODE env NFSHOME=$NFSHOME ${MYDIR?}/setup.sh baseline ${FIRST?} ${COUNT?} ${CLUSTER_SIZE?} )
+    ( set -x; run-on $NODE env NFSHOME=$NFSHOME ${MYDIR?}/setup.sh baseline ${FIRST?} ${COUNT?} ${CLUSTER_SIZE?} )
     let "COUNT=$COUNT+1"
   done
 
@@ -116,20 +186,20 @@ function add-nodes() {
   # we have to make _all_ nomad servers VERY angry first, before we can get a leader and token
   COUNT=${INITIAL_CLUSTER_SIZE?}
   for NODE in ${NODES?}; do
-    ( set -x; ssh $NODE env NFSHOME=$NFSHOME ${MYDIR?}/setup.sh customize ${FIRST?} ${COUNT?} ${CLUSTER_SIZE?} )
+    ( set -x; run-on $NODE env NFSHOME=$NFSHOME ${MYDIR?}/setup.sh customize ${FIRST?} ${COUNT?} ${CLUSTER_SIZE?} )
     let "COUNT=$COUNT+1"
   done
 
   # 🤦‍♀️ now we can finally get them to cluster up, elect a leader, and do their f***ing job
   COUNT=${INITIAL_CLUSTER_SIZE?}
   for NODE in ${NODES?}; do
-    ( set -x; ssh $NODE env NFSHOME=$NFSHOME ${MYDIR?}/setup.sh customize2 ${FIRST?} ${COUNT?} ${CLUSTER_SIZE?} )
+    ( set -x; run-on $NODE env NFSHOME=$NFSHOME ${MYDIR?}/setup.sh customize2 ${FIRST?} ${COUNT?} ${CLUSTER_SIZE?} )
     let "COUNT=$COUNT+1"
   done
 
   # ugh, facepalm
   for NODE in ${NODES?}; do
-    ssh $NODE 'sudo rm /opt/consul/serf/local.keyring;  sudo service consul restart;  echo'
+    run-on $NODE 'sudo rm /opt/consul/serf/local.keyring;  sudo '$SCTL' restart consul;  echo'
   done
 }
 
@@ -139,6 +209,7 @@ function baseline() {
 
   # install docker if not already present
   $MYDIR/install-docker-ce.sh
+  # [ $HIND ]  &&  apt-get purge -yqq  docker-ce
 
   # install binaries and service files
   #   eg: /usr/bin/nomad  /etc/nomad.d/nomad.hcl  /usr/lib/systemd/system/nomad.service
@@ -189,8 +260,8 @@ function customize2() {
   #   "No installed keys could decrypt the message"
   # try either (depending on nomad or consul) inspecting all nodes' contents of file) and:
   echo 'skipping .keyring resets'  ||  (
-    sudo rm /opt/nomad/data/server/serf.keyring; sudo service nomad  restart
-    sudo rm /opt/consul/serf/local.keyring;      sudo service consul restart
+    sudo rm /opt/nomad/data/server/serf.keyring; sudo $SCTL restart nomad
+    sudo rm /opt/consul/serf/local.keyring;      sudo $SCTL restart consul
   )
   # and try again manually
   # (All servers need the same contents)
@@ -209,6 +280,8 @@ function customize2() {
 
 function finish() {
   sleep 30
+
+  nomad-env-vars
   nomad run ${MYDIR?}/etc/fabio.hcl
 
 
@@ -261,7 +334,7 @@ function setup-consul() {
     # starting cluster - how exciting!  mint some tokens
     TOK_C=$(consul keygen |tr -d ^)
   else
-    TOK_C=$(ssh ${FIRST?} "egrep '^encrypt\s*=' ${CONSUL_HCL?}" |cut -f2- -d= |tr -d '\t "')
+    TOK_C=$(run-on ${FIRST?} "egrep '^encrypt\s*=' ${CONSUL_HCL?}" |cut -f2- -d= |tr -d '\t "')
   fi
 
   echo '
@@ -273,7 +346,7 @@ encrypt = "'${TOK_C?}'"
 retry_join = ["'${FIRSTIP?}'"]
 ' | sudo tee -a  $CONSUL_HCL
 
-  sudo systemctl restart consul  &&  sleep 10
+  sudo $SCTL restart consul  &&  sleep 10
 }
 
 
@@ -283,13 +356,13 @@ function setup-nomad() {
 
   ( configure-nomad ) | sudo tee -a $NOMAD_HCL
 
-  sudo systemctl restart nomad  &&  sleep 10
+  sudo $SCTL restart nomad  &&  sleep 10
 }
 
 
 function configure-nomad() {
   [ $COUNT -eq 0 ]  &&  TOK_N=$(nomad operator keygen |tr -d ^ |cat)
-  [ $COUNT -ge 1 ]  &&  TOK_N=$(ssh ${FIRST?} "egrep  'encrypt\s*=' ${NOMAD_HCL?}"  |cut -f2- -d= |tr -d '\t "' |cat)
+  [ $COUNT -ge 1 ]  &&  TOK_N=$(run-on ${FIRST?} "egrep  'encrypt\s*=' ${NOMAD_HCL?}"  |cut -f2- -d= |tr -d '\t "' |cat)
 
   set +x
 
@@ -391,6 +464,7 @@ client {
 
 
 function nomad-env-vars() {
+  mkdir -p $HOME/.config
   CONF=$HOME/.config/nomad
   if [ ${COUNT?} -eq 0 ]; then
     # NOTE: if you can't listen on :443 and :80 (the ideal defaults), you'll need to change
@@ -412,8 +486,8 @@ export NOMAD_TOKEN="$(fgrep 'Secret ID' $NOMACL |cut -f2- -d= |tr -d ' ') |tee $
 
 
 function setup-misc() {
-  ${MYDIR?}/ports-unblock.sh
-  sudo service docker restart  ||  echo 'no docker yet'
+  [ $HIND ]  ||  ${MYDIR?}/ports-unblock.sh
+  [ $HIND ]  ||  sudo service docker restart  ||  echo 'no docker yet'
 
   [ ${COUNT?} -eq 0 ]  &&  (
     # One server in cluster gets marked for hosting repos with Persistent Volume requirements.
@@ -433,14 +507,34 @@ function setup-misc() {
     echo "server=/consul/127.0.0.1#8600" |sudo tee /etc/dnsmasq.d/nomad
     sudo service dnsmasq restart
     sleep 2
-  )
+  )  ||  echo 'no dnsmasq'
 }
 
 
 function setup-daemons() {
   # get services ready to go
-  sudo systemctl daemon-reload
-  sudo systemctl enable  consul  nomad
+  if [ $HIND ]; then
+echo "
+[program:docker]
+command=/usr/bin/dockerd
+autorestart=true
+startsecs=10
+
+[program:nomad]
+command=/usr/bin/nomad  agent -config     /etc/nomad.d
+autorestart=true
+startsecs=10
+
+[program:consul]
+command=/usr/bin/consul agent -config-dir=/etc/consul.d/
+autorestart=true
+startsecs=10
+" >| /etc/supervisor/conf.d/hind.conf
+    supervisord
+  else
+    sudo systemctl daemon-reload
+    sudo systemctl enable  consul  nomad
+  fi
 }
 
 
@@ -454,14 +548,17 @@ function setup-certs() {
   sudo chown root:root /etc/fabio/ssl/
   cat ${MYDIR?}/etc/fabio.properties |sudo tee /etc/fabio/fabio.properties
 
+  COPY="rsync -Pav"
+  [ $HIND ]  &&  COPY="cp -p"
+
   [ $TLS_CRT ]  &&  sudo bash -c "(
-    rsync -Pav ${TLS_CRT?} ${CRT?}
-    rsync -Pav ${TLS_KEY?} ${KEY?}
+    ${COPY?} ${TLS_CRT?} ${CRT?}
+    ${COPY?} ${TLS_KEY?} ${KEY?}
   )"
 
   [ ${COUNT?} -gt 0 ]  &&  bash -c "(
-    ssh ${FIRST?} sudo cat ${CRT?} |sudo tee ${CRT} >/dev/null
-    ssh ${FIRST?} sudo cat ${KEY?} |sudo tee ${KEY} >/dev/null
+    run-on ${FIRST?} sudo cat ${CRT?} |sudo tee ${CRT} >/dev/null
+    run-on ${FIRST?} sudo cat ${KEY?} |sudo tee ${KEY} >/dev/null
   )"
 
   sudo chown root.root ${CRT} ${KEY}
