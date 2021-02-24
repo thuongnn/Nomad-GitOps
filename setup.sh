@@ -8,7 +8,7 @@
 # Current Overview:
 #   Installs nomad server and client on all nodes, securely talking together & electing a leader
 #   Installs consul server and client on all nodes
-#   Installs load balancer "fabio" on first two nodes
+#   Installs load balancer "fabio" on all nodes
 #      (in case you want to use multiple IP addresses for deployments in case one LB/node is out)
 #   Optionally installs gitlab runner on 1st node
 #   Sets up Persistent Volume subdirs on 1st node - deployments needing PV only schedule to this node
@@ -54,7 +54,7 @@ MACOS:
 
 # avoid any environment vars from CLI poisoning..
 unset   NOMAD_TOKEN
-unset  CONSUL_TOKEN
+unset   NOMAD_ADDR
 
 
 function main() {
@@ -69,10 +69,6 @@ function main() {
     "$1"
     exit 0
   else
-    # avoid and environment contamination
-    unset NOMAD_ADDR
-    unset NOMAD_TOKEN
-
     TLS_CRT=$1  # @see create-https-certs.sh - fully qualified path to crt file it created
     TLS_KEY=$2  # @see create-https-certs.sh - fully qualified path to key file it created
     shift
@@ -183,12 +179,6 @@ function add-nodes() {
     run-on $NODE env NFSHOME=$NFSHOME ${MYDIR?}/setup.sh customize2 ${FIRST?} ${COUNT?} ${CLUSTER_SIZE?}
     let "COUNT=$COUNT+1"
   done
-
-  # ugh, facepalm
-  for NODE in ${NODES?}; do
-    run-on $NODE sudo rm /opt/consul/serf/local.keyring
-    run-on $NODE sudo ${SYSCTL?} restart consul
-  done
 }
 
 
@@ -276,10 +266,11 @@ function customize2() {
   # NOTE: if you see failures join-ing and messages like:
   #   "No installed keys could decrypt the message"
   # try either (depending on nomad or consul) inspecting all nodes' contents of file) and:
-  echo 'skipping .keyring resets'  ||  (
-    sudo rm /opt/nomad/data/server/serf.keyring; sudo ${SYSCTL?} restart  nomad
-    sudo rm /opt/consul/serf/local.keyring;      sudo ${SYSCTL?} restart  consul
-  )
+  # sudo rm /opt/nomad/data/server/serf.keyring
+  # sudo ${SYSCTL?} restart  nomad
+  sudo rm /opt/consul/serf/local.keyring
+  sudo ${SYSCTL?} restart  consul
+
   # and try again manually
   # (All servers need the same contents)
 
