@@ -45,8 +45,6 @@ MACOS:
       [DOMAIN]-cert.pem
       [DOMAIN]-key.pem
 
-  xxx dnsmasq
-
   Additional step:
   [System Preferences] [Network] [Advanced] [DNS] [DNS Servers] add '127.0.0.1' as *first* resolver
 
@@ -296,7 +294,11 @@ function customize2() {
 function finish() {
   sleep 30
   nomad-env-vars
-  nomad run ${MYDIR?}/etc/fabio.hcl
+
+  # ideally fabio is running in docker - but macos issues so alt "exec" driver instead of "docker"
+  # https://medium.com/hashicorp-engineering/hashicorp-nomad-from-zero-to-wow-1615345aa539
+  [ $MAC ]  &&  nomad run ${MYDIR?}/etc/fabio-exec.hcl
+  [ $MAC ]  ||  nomad run ${MYDIR?}/etc/fabio.hcl
 
 
   echo "Setup GitLab runner in your cluster?\n"
@@ -593,6 +595,8 @@ function setup-certs() {
 
 function setup-dnsmasq() {
   # sets up a wildcard dns domain to resolve to your mac
+  # inspiration:
+  #   https://hedichaibi.com/how-to-setup-wildcard-dev-domains-with-dnsmasq-on-a-mac/
   [ $MAC ]  ||  return
 
   brew install dnsmasq
