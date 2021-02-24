@@ -2,8 +2,7 @@
 
 # One time setup of server(s) to make a nomad cluster.
 #
-# Assumes you are creating cluster with debian/ubuntu VMs/baremetals,
-# that you have ssh and sudo access to.
+# Assumes you are creating a cluster (of one node) on a mac.
 #
 # Current Overview:
 #   Installs nomad server and client on all nodes, securely talking together & electing a leader
