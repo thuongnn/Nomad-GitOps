@@ -38,6 +38,19 @@ If invoking cmd-line has env var NFSHOME=1 then we'll setup /home/ r/o and r/w m
 
 To simplify, we'll reuse TLS certs, setting up ACL and TLS for nomad.
 
+
+MACOS:
+  Additional requirement:
+    TLS command-line args must match pattern:
+      [DOMAIN]-cert.pem
+      [DOMAIN]-key.pem
+
+  xxx dnsmasq
+
+  Additional step:
+  [System Preferences] [Network] [Advanced] [DNS] [DNS Servers] add '127.0.0.1' as *first* resolver
+
+
 "  &&  exit 1
 
 
@@ -58,18 +71,22 @@ function main() {
     "$1"
     exit 0
   else
-    FIRST=$(hostname -f)
+    # avoid and environment contamination
+    unset NOMAD_ADDR
+    unset NOMAD_TOKEN
+
     TLS_CRT=$1  # @see create-https-certs.sh - fully qualified path to crt file it created
     TLS_KEY=$2  # @see create-https-certs.sh - fully qualified path to key file it created
     shift
     INITIAL_CLUSTER_SIZE=0
     CLUSTER_SIZE=$#
     shift
-    typeset -a $NODES
-    NODES=( $FIRST "$@" )
 
     set -x
     config
+
+    typeset -a $NODES
+    NODES=( ${FIRST?} "$@" )
 
     # use the TLS_CRT and TLS_KEY params
     ( COUNT=0 setup-certs )
@@ -92,15 +109,53 @@ function config() {
   # We will put LB/fabio on first X servers
   export LB_COUNT=${CLUSTER_SIZE?}
 
+  export MAC=
+  [ $(uname) = "Darwin" ]  &&  export MAC=1
+
+  if [ $MAC ]; then
+    export SYSCTL=/usr/local/bin/supervisorctl
+    local DOMAIN=$(basename "${TLS_CRT?}" |rev |cut -f2- -d- |rev)
+    export FIRST=nom.${DOMAIN?}
+  else
+    export SYSCTL=systemctl
+    if [ "$FIRST" = "" ]; then
+      export FIRST=$(hostname -f)
+    fi
+  fi
+
   export  NOMAD_ADDR="https://${FIRST?}:4646"
   export CONSUL_ADDR="http://localhost:8500"
   export  FABIO_ADDR="http://localhost:9998"
-  export MAX_PV=20
-  export FIRSTIP=$(host ${FIRST?} | perl -ane 'print $F[3] if $F[2] eq "address"')
+  export PV_MAX=20
+  export PV_DIR=/pv
 
-  # find daemon config files
-   NOMAD_HCL=$(dpkg -L nomad  2>/dev/null |egrep ^/etc/ |egrep -m1 '\.hcl$' || echo -n '')
-  CONSUL_HCL=$(dpkg -L consul 2>/dev/null |egrep ^/etc/ |egrep -m1 '\.hcl$' || echo -n '')
+  if [ $MAC ]; then
+    export FIRSTIP=$(ifconfig |egrep -o 'inet [0-9\.]+' |cut -f2 -d' ' |fgrep -v 127.0.0.1)
+    export PV_DIR=/opt/nomad/pv
+
+    # setup unix counterpart default config
+     NOMAD_HCL=/etc/nomad.d/nomad.hcl
+    CONSUL_HCL=/etc/consul.d/consul.hcl
+  else
+    export FIRSTIP=$(host ${FIRST?} | perl -ane 'print $F[3] if $F[2] eq "address"')
+    # find daemon config files
+     NOMAD_HCL=$(dpkg -L nomad  2>/dev/null |egrep ^/etc/ |egrep -m1 '\.hcl$' || echo -n '')
+    CONSUL_HCL=$(dpkg -L consul 2>/dev/null |egrep ^/etc/ |egrep -m1 '\.hcl$' || echo -n '')
+  fi
+}
+
+
+
+function run-on() {
+  # unix: ssh to node and run a command;  mac: run command (single node cluster :-)
+  NODE="$1"
+  shift
+
+  if [ $MAC ]; then
+    ( set -x; "$@" )
+  else
+    ( set -x; ssh $NODE "$@" )
+  fi
 }
 
 
@@ -108,7 +163,7 @@ function add-nodes() {
   # install & setup stock nomad & consul
   COUNT=${INITIAL_CLUSTER_SIZE?}
   for NODE in ${NODES?}; do
-    ( set -x; ssh $NODE env NFSHOME=$NFSHOME ${MYDIR?}/setup.sh baseline ${FIRST?} ${COUNT?} ${CLUSTER_SIZE?} )
+    run-on $NODE env NFSHOME=$NFSHOME ${MYDIR?}/setup.sh baseline ${FIRST?} ${COUNT?} ${CLUSTER_SIZE?}
     let "COUNT=$COUNT+1"
   done
 
@@ -116,20 +171,21 @@ function add-nodes() {
   # we have to make _all_ nomad servers VERY angry first, before we can get a leader and token
   COUNT=${INITIAL_CLUSTER_SIZE?}
   for NODE in ${NODES?}; do
-    ( set -x; ssh $NODE env NFSHOME=$NFSHOME ${MYDIR?}/setup.sh customize ${FIRST?} ${COUNT?} ${CLUSTER_SIZE?} )
+    run-on $NODE env NFSHOME=$NFSHOME ${MYDIR?}/setup.sh customize ${FIRST?} ${COUNT?} ${CLUSTER_SIZE?}
     let "COUNT=$COUNT+1"
   done
 
   # 🤦‍♀️ now we can finally get them to cluster up, elect a leader, and do their f***ing job
   COUNT=${INITIAL_CLUSTER_SIZE?}
   for NODE in ${NODES?}; do
-    ( set -x; ssh $NODE env NFSHOME=$NFSHOME ${MYDIR?}/setup.sh customize2 ${FIRST?} ${COUNT?} ${CLUSTER_SIZE?} )
+    run-on $NODE env NFSHOME=$NFSHOME ${MYDIR?}/setup.sh customize2 ${FIRST?} ${COUNT?} ${CLUSTER_SIZE?}
     let "COUNT=$COUNT+1"
   done
 
   # ugh, facepalm
   for NODE in ${NODES?}; do
-    ssh $NODE 'sudo rm /opt/consul/serf/local.keyring;  sudo service consul restart;  echo'
+    run-on $NODE sudo rm /opt/consul/serf/local.keyring
+    run-on $NODE sudo ${SYSCTL?} restart consul
   done
 }
 
@@ -137,18 +193,47 @@ function add-nodes() {
 function baseline() {
   cd /tmp
 
-  # install docker if not already present
-  $MYDIR/install-docker-ce.sh
-
   # install binaries and service files
   #   eg: /usr/bin/nomad  /etc/nomad.d/nomad.hcl  /usr/lib/systemd/system/nomad.service
+  if [ $MAC ]; then
+    brew install  nomad  consul  supervisord
 
-  curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
-  sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
-  sudo apt-get -yqq update
+    sudo mkdir -p $(dirname  $NOMAD_HCL)
+    sudo mkdir -p $(dirname $CONSUL_HCL)
 
-  sudo apt-get -yqq install  nomad  consul
+    # start with unix pkg defaults
+    echo '
+data_dir = "/opt/nomad/data"
+bind_addr = "0.0.0.0"
+server {
+  enabled = true
+  bootstrap_expect = 1
+}
+client {
+  enabled = true
+  servers = ["127.0.0.1:4646"]
+}
+' | sudo tee $NOMAD_HCL
 
+    # start with unix pkg defaults
+    echo '
+data_dir = "/opt/consul"
+client_addr = "0.0.0.0"
+ui = true
+' | sudo tee $CONSUL_HCL
+
+  else
+
+    # install docker if not already present
+    $MYDIR/install-docker-ce.sh
+
+
+    curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
+    sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
+    sudo apt-get -yqq update
+
+    sudo apt-get -yqq install  nomad  consul
+  fi
 
   config
 
@@ -163,6 +248,7 @@ function baseline() {
 
 
   # start up uncustomized versions of nomad and consul
+  setup-dnsmasq
   setup-certs
   setup-misc
   setup-daemons
@@ -189,8 +275,8 @@ function customize2() {
   #   "No installed keys could decrypt the message"
   # try either (depending on nomad or consul) inspecting all nodes' contents of file) and:
   echo 'skipping .keyring resets'  ||  (
-    sudo rm /opt/nomad/data/server/serf.keyring; sudo service nomad  restart
-    sudo rm /opt/consul/serf/local.keyring;      sudo service consul restart
+    sudo rm /opt/nomad/data/server/serf.keyring; sudo ${SYSCTL?} restart  nomad
+    sudo rm /opt/consul/serf/local.keyring;      sudo ${SYSCTL?} restart  consul
   )
   # and try again manually
   # (All servers need the same contents)
@@ -209,6 +295,7 @@ function customize2() {
 
 function finish() {
   sleep 30
+  nomad-env-vars
   nomad run ${MYDIR?}/etc/fabio.hcl
 
 
@@ -273,7 +360,7 @@ encrypt = "'${TOK_C?}'"
 retry_join = ["'${FIRSTIP?}'"]
 ' | sudo tee -a  $CONSUL_HCL
 
-  sudo systemctl restart consul  &&  sleep 10
+  sudo ${SYSCTL?} restart consul  &&  sleep 10
 }
 
 
@@ -283,7 +370,7 @@ function setup-nomad() {
 
   ( configure-nomad ) | sudo tee -a $NOMAD_HCL
 
-  sudo systemctl restart nomad  &&  sleep 10
+  sudo ${SYSCTL?} restart nomad  &&  sleep 10  ||  echo 'moving on ...'
 }
 
 
@@ -374,10 +461,10 @@ client {
 
   [ ${COUNT?} -eq 0 ]  &&  (
     # pass through disk from host for now.  peg project(s) with PV requirements to this host.
-    for N in $(seq 1 ${MAX_PV?}); do
+    for N in $(seq 1 ${PV_MAX?}); do
       echo -n '
     host_volume "pv'$N'" {
-      path      = "/pv/'$N'"
+      path      = "'$PV_DIR'/'$N'"
       read_only = false
     }'
     done
@@ -396,6 +483,7 @@ function nomad-env-vars() {
     # NOTE: if you can't listen on :443 and :80 (the ideal defaults), you'll need to change
     # the two fabio.* files in this dir, re-copy the fabio.properties file in place and manually
     # restart fabio..
+    [ -e $CONF ]  &&  mv $CONF $CONF.prev
     local NOMACL=$HOME/.config/nomad.$(echo ${FIRST?} |cut -f1 -d.)
     mkdir -p $(dirname $NOMACL)
     chmod 600 $NOMACL $CONF 2>/dev/null |cat
@@ -412,16 +500,16 @@ export NOMAD_TOKEN="$(fgrep 'Secret ID' $NOMACL |cut -f2- -d= |tr -d ' ') |tee $
 
 
 function setup-misc() {
-  ${MYDIR?}/ports-unblock.sh
-  sudo service docker restart  ||  echo 'no docker yet'
+  [ $MAC ]  ||  ${MYDIR?}/ports-unblock.sh
+  [ $MAC ]  ||  sudo service docker restart  ||  echo 'no docker yet'
 
   [ ${COUNT?} -eq 0 ]  &&  (
     # One server in cluster gets marked for hosting repos with Persistent Volume requirements.
     # Keeping things simple, and to avoid complex multi-host solutions like rook/ceph, we'll
     # pass through these `/pv/` dirs from the VM/host to containers.  Each container using it
     # needs to use a unique subdir...
-    for N in $(seq 1 ${MAX_PV?}); do
-      sudo mkdir -m777 -p /pv/$N
+    for N in $(seq 1 ${PV_MAX?}); do
+      sudo mkdir -m777 -p ${PV_DIR?}/$N
     done
   )
 
@@ -429,30 +517,55 @@ function setup-misc() {
   # This gets us DNS resolving on archive.org VMs, at the VM level (not inside containers)-8
   # for hostnames like:
   #   services-clusters.service.consul
-  [ -e /etc/dnsmasq.d/ ]  &&  (
-    echo "server=/consul/127.0.0.1#8600" |sudo tee /etc/dnsmasq.d/nomad
-    sudo service dnsmasq restart
-    sleep 2
-  )
+  if [ ! $MAC ]; then
+    [ -e /etc/dnsmasq.d/ ]  &&  (
+      echo "server=/consul/127.0.0.1#8600" |sudo tee /etc/dnsmasq.d/nomad
+      sudo $SYSCTL restart dnsmasq
+      sleep 2
+    )
+  fi
 }
 
 
 function setup-daemons() {
   # get services ready to go
-  sudo systemctl daemon-reload
-  sudo systemctl enable  consul  nomad
+  if [ $MAC ]; then
+    local SUPERD=/usr/local/etc/supervisor.d
+    mkdir -p $SUPERD
+    echo "
+[program:nomad]
+command=/usr/local/bin/nomad  agent -config     /etc/nomad.d
+autorestart=true
+startsecs=10
+
+[program:consul]
+command=/usr/local/bin/consul agent -config-dir=/etc/consul.d/
+autorestart=true
+startsecs=10
+" >| $SUPERD/hashi.ini
+    sudo supervisord  ||  echo 'hopefully supervisord is already running..'
+  else
+    sudo systemctl daemon-reload
+    sudo systemctl enable  consul  nomad
+  fi
 }
 
 
 function setup-certs() {
   # sets up https / TLS  and fabio for routing, loadbalancing, and https traffic
-  local DOMAIN=$(echo $FIRST |cut -f2- -d.)
+  local DOMAIN=$(echo ${FIRST?} |cut -f2- -d.)
   local CRT=/etc/fabio/ssl/${DOMAIN?}-cert.pem
   local KEY=/etc/fabio/ssl/${DOMAIN?}-key.pem
 
-  sudo mkdir -p /etc/fabio/ssl/
-  sudo chown root:root /etc/fabio/ssl/
+  local GRP=root
+  [ $MAC ]  &&  GRP=wheel
+
+  sudo mkdir -p           /etc/fabio/ssl/
+  sudo chown root:${GRP?} /etc/fabio/ssl/
   cat ${MYDIR?}/etc/fabio.properties |sudo tee /etc/fabio/fabio.properties
+
+  # only need to do this if fabio is running in a container:
+  # [ $MAC ] && echo "registry.consul.addr = ${FIRST?}:8500" |sudo tee -a /etc/fabio/fabio.properties
 
   [ $TLS_CRT ]  &&  sudo bash -c "(
     rsync -Pav ${TLS_CRT?} ${CRT?}
@@ -464,7 +577,7 @@ function setup-certs() {
     ssh ${FIRST?} sudo cat ${KEY?} |sudo tee ${KEY} >/dev/null
   )"
 
-  sudo chown root.root ${CRT} ${KEY}
+  sudo chown root:${GRP?} ${CRT} ${KEY}
   sudo chmod 444 ${CRT}
   sudo chmod 400 ${KEY}
 
@@ -475,6 +588,29 @@ function setup-certs() {
   sudo chown -R nomad.nomad /opt/nomad/tls  ||  echo 'future pass will work'
   sudo chmod -R go-rwx      /opt/nomad/tls
 
+}
+
+
+function setup-dnsmasq() {
+  # sets up a wildcard dns domain to resolve to your mac
+  [ $MAC ]  ||  return
+
+  brew install dnsmasq
+
+  local DOMAIN=$(echo ${FIRST?} |cut -f2- -d.)
+
+  echo "
+# from https://gitlab.com/internetarchive/nomad/-/blob/master/setup.sh
+
+address=/${DOMAIN?}/${FIRSTIP?}
+listen-address=127.0.0.1
+" |tee /usr/local/etc/dnsmasq.conf
+
+  sudo brew services start dnsmasq
+
+  # verify host lookups are working now
+  #local IP=$(host udev-idev-everybodydev.x.archive.org |rev |cut -f1 -d ' ' |head -1)
+  # [ "$IP" = "$FIRSTIP" ]  ||  exit 1
 }
 
 
