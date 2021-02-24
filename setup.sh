@@ -112,8 +112,12 @@ function config() {
 
   if [ $MAC ]; then
     export SYSCTL=/usr/local/bin/supervisorctl
-    local DOMAIN=$(basename "${TLS_CRT?}" |rev |cut -f2- -d- |rev)
-    export FIRST=nom.${DOMAIN?}
+    if [ "$TLS_CRT" = "" ]; then
+      local DOMAIN=$(echo "$FIRST" |cut -f2- -d.)
+    else
+      local DOMAIN=$(basename "${TLS_CRT?}" |rev |cut -f2- -d- |rev)
+      export FIRST=nom.${DOMAIN?}
+    fi
   else
     export SYSCTL=systemctl
     if [ "$FIRST" = "" ]; then
