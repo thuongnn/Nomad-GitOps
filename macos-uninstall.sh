@@ -3,23 +3,24 @@
 # Removes nomad/consul cluster-of-1 from a Mac that has run @see `setup.sh`
 #
 # PLEASE verify the four main packages will be removing are right for you
-# (for example, esp. you aren't using `dnsmasq` or `supervisor` for anything else)
+# (for example, esp. you aren't using `dnsmasq` for anything else)
 
-# docker stop  fabio
-# docker rm -v fabio
+
 nomad stop fabio
+# normally we use exec driver, but in case ever use docker driver for fabio:
+docker stop  fabio
+docker rm -v fabio
+
 
 sudo brew services stop dnsmasq
+sudo brew services stop consul
+sudo brew services stop nomad
+sleep 10
 
-sudo supervisorctl stop all
-sleep 5
-SUPERPID=$(ps auxwww |fgrep /usr/local/bin/supervisord |grep -v grep |tr -s ' ' |cut -f2 -d ' ')
-sudo kill $SUPERPID
-sleep 5
 sudo killall nomad
 sudo killall consul
 
-brew uninstall  nomad  consul  supervisor  dnsmasq
+brew uninstall  nomad  consul  dnsmasq
 
 sudo rm -rfv $(echo "
   /etc/fabio
@@ -28,9 +29,6 @@ sudo rm -rfv $(echo "
   /usr/local/etc/dnsmasq/*
   /opt/nomad
   /opt/consul
-  /usr/local/etc/supervisord.conf
-  /usr/local/etc/supervisor.d/
-  /usr/local/var/log/supervisord.log
   /opt/nomad
   /opt/consul
   $HOME/.config/nomad.nom

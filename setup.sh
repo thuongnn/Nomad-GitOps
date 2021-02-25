@@ -100,14 +100,17 @@ function config() {
   export CONSUL_COUNT=${CLUSTER_SIZE?}
 
   # We will put PV on 1st server
-  # We will put LB/fabio on first X servers
+  # We will put LB/fabio on all servers
   export LB_COUNT=${CLUSTER_SIZE?}
 
   export MAC=
   [ $(uname) = "Darwin" ]  &&  export MAC=1
 
+
+  typset -a SYSCTL # array
+
   if [ $MAC ]; then
-    export SYSCTL=/usr/local/bin/supervisorctl
+    export SYSCTL=(brew services)
     if [ "$TLS_CRT" = "" ]; then
       local DOMAIN=$(echo "$FIRST" |cut -f2- -d.)
     else
@@ -115,7 +118,7 @@ function config() {
       export FIRST=nom.${DOMAIN?}
     fi
   else
-    export SYSCTL=systemctl
+    export SYSCTL=(systemctl)
     if [ "$FIRST" = "" ]; then
       export FIRST=$(hostname -f)
     fi
@@ -188,7 +191,7 @@ function baseline() {
   # install binaries and service files
   #   eg: /usr/bin/nomad  /etc/nomad.d/nomad.hcl  /usr/lib/systemd/system/nomad.service
   if [ $MAC ]; then
-    brew install  nomad  consul  supervisord
+    brew install  nomad  consul
 
     sudo mkdir -p $(dirname  $NOMAD_HCL)
     sudo mkdir -p $(dirname $CONSUL_HCL)
@@ -433,8 +436,8 @@ tls {
 client {
 '
 
-  # Let's put the loadbalancer on the first two nodes added to cluster.
-  # All jobs requiring a PV get put on first node in cluster.
+  # We'll put a loadbalancer on all cluster nodes
+  # All jobs requiring a PV get put on first cluster node
   local KIND='worker'
   [ ${COUNT?} -lt ${LB_COUNT?} ]  &&  KIND="$KIND,lb"
   [ ${COUNT?} -eq 0 ]             &&  KIND="$KIND,pv"
@@ -527,20 +530,16 @@ function setup-misc() {
 function setup-daemons() {
   # get services ready to go
   if [ $MAC ]; then
-    local SUPERD=/usr/local/etc/supervisor.d
-    mkdir -p $SUPERD
-    echo "
-[program:nomad]
-command=/usr/local/bin/nomad  agent -config     /etc/nomad.d
-autorestart=true
-startsecs=10
+    sed -i -e 's|<string>-dev</string>|<string>-config=/etc/nomad.d</string>|' \
+      /usr/local/Cellar/nomad/*/*plist
 
-[program:consul]
-command=/usr/local/bin/consul agent -config-dir=/etc/consul.d/
-autorestart=true
-startsecs=10
-" >| $SUPERD/hashi.ini
-    sudo supervisord  ||  echo 'hopefully supervisord is already running..'
+    sed -i -e 's|<string>-dev</string>|<string>-config-dir=/etc/consul.d/</string>|' \
+      /usr/local/Cellar/consul/*/*plist
+    sed -i -e 's|<string>-bind</string>||'      /usr/local/Cellar/consul/*/*plist
+    sed -i -e 's|<string>127.0.0.1</string>||'  /usr/local/Cellar/consul/*/*plist
+
+    sudo ${SYSCTL?} start nomad
+    sudo ${SYSCTL?} start consul
   else
     sudo systemctl daemon-reload
     sudo systemctl enable  consul  nomad

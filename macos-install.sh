@@ -39,6 +39,9 @@ MACOS:
   [System Preferences] [Network] [Advanced] [DNS] [DNS Servers] add '127.0.0.1' as *first* resolver
 
 
+SEE ALSO INCREMENTAL VERSION OF THIS WITH SLIDES:
+  https://archive.org/~tracey/slides/devops/2021-02-24
+
 "  &&  exit 1
 
 
@@ -64,7 +67,8 @@ function main() {
 
 
 function config() {
-  export SYSCTL=/usr/local/bin/supervisorctl
+  typset -a SYSCTL; # array
+  export SYSCTL=(brew services)
 
   export DOMAIN=$(basename "${TLS_CRT?}" |rev |cut -f2- -d- |rev)
   export FIRST=nom.${DOMAIN?}
@@ -89,7 +93,7 @@ function add-nodes() {
 
   # install binaries and service files
   #   eg: /usr/bin/nomad  /etc/nomad.d/nomad.hcl  /usr/lib/systemd/system/nomad.service
-  brew install  nomad  consul  supervisord
+  brew install  nomad  consul
 
   sudo mkdir -p $(dirname  $NOMAD_HCL)
   sudo mkdir -p $(dirname $CONSUL_HCL)
@@ -303,8 +307,8 @@ tls {
 client {
 '
 
-  # Let's put the loadbalancer on the first two nodes added to cluster.
-  # All jobs requiring a PV get put on first node in cluster.
+  # We'll put a loadbalancer on all cluster nodes
+  # All jobs requiring a PV get put on first cluster node
   local KIND='worker'
   KIND="$KIND,lb"
   KIND="$KIND,pv"
@@ -365,22 +369,16 @@ export NOMAD_TOKEN="$(fgrep 'Secret ID' $NOMACL |cut -f2- -d= |tr -d ' ') |tee $
 
 function setup-daemons() {
   # get services ready to go
+  sed -i -e 's|<string>-dev</string>|<string>-config=/etc/nomad.d</string>|' \
+    /usr/local/Cellar/nomad/*/*plist
 
-  local SUPERD=/usr/local/etc/supervisor.d
-  mkdir -p $SUPERD
-  echo "
-[program:nomad]
-command=/usr/local/bin/nomad  agent -config     /etc/nomad.d
-autorestart=true
-startsecs=10
+  sed -i -e 's|<string>-dev</string>|<string>-config-dir=/etc/consul.d/</string>|'\
+    /usr/local/Cellar/consul/*/*plist
+  sed -i -e 's|<string>-bind</string>||'      /usr/local/Cellar/consul/*/*plist
+  sed -i -e 's|<string>127.0.0.1</string>||'  /usr/local/Cellar/consul/*/*plist
 
-[program:consul]
-command=/usr/local/bin/consul agent -config-dir=/etc/consul.d/
-autorestart=true
-startsecs=10
-" >| $SUPERD/hashi.ini
-  sudo supervisord  ||  echo 'hopefully supervisord is already running..'
-
+  sudo ${SYSCTL?} start nomad
+  sudo ${SYSCTL?} start consul
 }
 
 
@@ -430,7 +428,7 @@ address=/${DOMAIN?}/${FIRSTIP?}
 listen-address=127.0.0.1
 " |tee /usr/local/etc/dnsmasq.conf
 
-  sudo brew services start dnsmasq
+  sudo ${SYSCTL?} start dnsmasq
 
   # verify host lookups are working now
 }
