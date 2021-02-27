@@ -36,7 +36,7 @@ function nom-ssh() {
   # Usage: [job name, eg: x-thumb]  -OR-  no args will use CWD to determine job
   [ $# -ge 1 ]  &&   JOB=$1
   [ $# -lt 1 ]  &&   JOB=$(nom-job-from-cwd)
-  [ $# -ge 2 ]  &&  TASK=$2    # for rarer TaskGroup case where 2+ Tasks spec-ed in sam Job
+  [ $# -ge 2 ]  &&  TASK=$2    # for rarer TaskGroup case where 2+ Tasks spec-ed in same Job
   [ $# -lt 2 ]  &&  TASK=$JOB
 
   ALLOC=$(nomad job status $JOB |egrep -m1 '\srun\s' |cut -f1 -d' ')
