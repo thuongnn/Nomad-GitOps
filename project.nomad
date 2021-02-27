@@ -41,6 +41,9 @@ variables {
   # Pass in "ro" or "rw" if you want an NFS /home/ mounted into container, as ReadOnly or ReadWrite
   HOME = ""
 
+  # used in conjunction with PG and PV_DB variables (below)
+  POSTGRESQL_PASSWORD = ""
+
   # There are more variables immediately after this - but they are "lists" or "maps" and need
   # special definitions to not have defaults or overrides be treated as strings.
 }
@@ -330,7 +333,7 @@ job "NOMAD_VAR_SLUG" {
           # https://www.nomadproject.io/docs/job-specification/template#environment-variables
           template {
             data = <<EOH
-POSTGRESQL_PASSWORD="{{env "POSTGRESQL_PASSWORD"}}"
+POSTGRESQL_PASSWORD="${var.POSTGRESQL_PASSWORD}"
 EOH
             destination = "secrets/file.env"
             env         = true
