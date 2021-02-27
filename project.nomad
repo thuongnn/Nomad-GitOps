@@ -227,10 +227,6 @@ job "NOMAD_VAR_SLUG" {
 
             ports = [for portnumber, portname in var.PORTS : portname]
 
-            volumes = [
-              "/kv/${var.SLUG}:/kv"
-            ]
-
             # The MEMORY var now becomes a **soft limit**
             # We will 10x that for a **hard limit**
             memory_hard_limit = "${var.MEMORY * 10}"
@@ -329,15 +325,6 @@ job "NOMAD_VAR_SLUG" {
 
           config {
             image = "docker.io/bitnami/postgresql:11.7.0-debian-10-r9"
-
-            volumes = [ "/kv/${var.SLUG}:/kv" ]
-
-            # setup needed DB env var and then do what the docker image would normally do
-            entrypoint = [
-              "/bin/sh", "-c",
-              "export POSTGRESQL_PASSWORD=$(cat /kv/DB_PW) && /entrypoint.sh /run.sh"
-            ]
-            command = "echo customized entrypoint used"
           }
 
           service {
@@ -395,16 +382,6 @@ job "NOMAD_VAR_SLUG" {
 
           config {
             image = "bitnami/mariadb" # :10.3-debian-10
-
-            volumes = [ "/kv/${var.SLUG}:/kv" ]
-
-            # setup needed DB env var and then do what the docker image would normally do
-            # https://github.com/bitnami/bitnami-docker-mariadb/blob/master/10.3/debian-10/Dockerfile
-            entrypoint = [
-              "/bin/sh", "-c",
-              "export MARIADB_PASSWORD=$(cat /kv/DB_PW)  WORDPRESS_DATABASE_PASSWORD=$(cat /kv/DB_PW)  &&  /opt/bitnami/scripts/mariadb/entrypoint.sh /opt/bitnami/scripts/mariadb/run.sh"
-            ]
-            command = "echo customized entrypoint used"
           }
 
           env {
