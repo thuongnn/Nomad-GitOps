@@ -168,6 +168,15 @@ In your project/repo Settings, set CI/CD environment variables starting with `NO
 ![Secrets](etc/secrets.jpg)
 and they will show up in your running container as environment variables, named with the lead `NOMAD_SECRET_` removed.  Thus, you can get `DATABASE_URL` (etc.) set in your running container - but not have it anywhere else in your docker image and not printed/shown during CI/CD pipeline phase logging.
 
+For each `NOMAD_SECRET_` environment variable, you need to add two related lines to your `Dockerfile`.
+
+For example, if you set `NOMAD_SECRET_SOMETHING` in your project CI/CD Variables, you'll want:
+```bash
+ARG SOMETHING
+ENV SOMETHING ${SOMETHING}
+```
+in your `Dockerfile`
+
 
 ### Postgres DB
 Requirements:
