@@ -29,11 +29,11 @@ build:
   stage: build
   before_script:
     - |
-      AUTO_DEVOPS_BUILD_IMAGE_EXTRA_ARGS=""
       for k in $(env |egrep ^NOMAD_SECRET_ |cut -f1 -d=); do
         v="${!k}"
         k2=$(echo $k | sed -e s/^NOMAD_SECRET_//)
-        AUTO_DEVOPS_BUILD_IMAGE_EXTRA_ARGS="$AUTO_DEVOPS_BUILD_IMAGE_EXTRA_ARGS --build-arg '$k2=$v'"
+        export $k2="$v"
+        AUTO_DEVOPS_BUILD_IMAGE_EXTRA_ARGS="$AUTO_DEVOPS_BUILD_IMAGE_EXTRA_ARGS --build-arg ${k2}"
       done
       export AUTO_DEVOPS_BUILD_IMAGE_EXTRA_ARGS
 
