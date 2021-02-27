@@ -327,6 +327,15 @@ job "NOMAD_VAR_SLUG" {
             image = "docker.io/bitnami/postgresql:11.7.0-debian-10-r9"
           }
 
+          # https://www.nomadproject.io/docs/job-specification/template#environment-variables
+          template {
+            data = <<EOH
+POSTGRESQL_PASSWORD="{{env "POSTGRESQL_PASSWORD"}}"
+EOH
+            destination = "secrets/file.env"
+            env         = true
+          }
+
           service {
             name = "${var.SLUG}-db"
             port = "${task.value}"
