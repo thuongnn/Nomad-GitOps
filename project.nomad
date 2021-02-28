@@ -44,6 +44,9 @@ variables {
   # used in conjunction with PG and PV_DB variables (below)
   POSTGRESQL_PASSWORD = ""
 
+  # used in conjunction with MYSQL and PV_DB variables (below)
+  DB_PASSWORD = ""
+
   # There are more variables immediately after this - but they are "lists" or "maps" and need
   # special definitions to not have defaults or overrides be treated as strings.
 }
@@ -400,6 +403,15 @@ EOH
             MARIADB_USER = "bn_wordpress"
             MARIADB_DATABASE = "bitnami_wordpress"
             ALLOW_EMPTY_PASSWORD = "yes"
+          }
+
+          template {
+            data = <<EOH
+MARIADB_PASSWORD="${var.DB_PASSWORD}"
+WORDPRESS_DATABASE_PASSWORD="${var.DB_PASSWORD}"
+EOH
+            destination = "secrets/file.env"
+            env         = true
           }
 
           service {
