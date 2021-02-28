@@ -421,7 +421,7 @@ EOH
             check {
               expose   = true
               type     = "tcp"
-              interval = "2s"
+              interval = "30s"
               timeout  = "2s"
             }
 
@@ -442,7 +442,7 @@ EOH
               name     = "db-ping"
               command  = "/opt/bitnami/mariadb/bin/mysqladmin"
               args     = ["ping", "silent"]
-              interval = "10s"
+              interval = "30s"
               timeout  = "10s"
             }
           } # end service
