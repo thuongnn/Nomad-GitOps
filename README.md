@@ -199,7 +199,9 @@ Requirements:
   - `NOMAD_VAR_PV`
   - `NOMAD_VAR_PV_DB`
 - set masked environment variables in your project's CI/CD Settings (see `Secrets` section above):
-  - `NOMAD_SECRET_`
+  - `NOMAD_SECRET_DB_PASSWORD`
+- also, for 2nd (DB) container, set masked CI/CD var (same value as above):
+  - `NOMAD_VAR_DB_PASSWORD`
 - Your main/webapp container can find the DB IP addressd in its `Dockerfile`'s `CMD` line to setup DB access.
   NOTE: The sleep should ensure `/alloc/data/*-db.ip` file gets created by DB Task 1st healthcheck
   which the webapp Task (above) can read.
