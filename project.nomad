@@ -409,6 +409,7 @@ EOH
             data = <<EOH
 MARIADB_PASSWORD="${var.DB_PASSWORD}"
 WORDPRESS_DATABASE_PASSWORD="${var.DB_PASSWORD}"
+MARIADB_ROOT_PASSWORD="${var.DB_PASSWORD}"
 EOH
             destination = "secrets/file.env"
             env         = true
