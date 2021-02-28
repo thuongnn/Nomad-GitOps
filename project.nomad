@@ -332,8 +332,9 @@ job "NOMAD_VAR_SLUG" {
 
           # https://www.nomadproject.io/docs/job-specification/template#environment-variables
           template {
+# POSTGRESQL_PASSWORD="${var.POSTGRESQL_PASSWORD}"
             data = <<EOH
-POSTGRESQL_PASSWORD="${var.POSTGRESQL_PASSWORD}"
+POSTGRESQL_PASSWORD="{{env POSTGRESQL_PASSWORD}}"
 EOH
             destination = "secrets/file.env"
             env         = true
