@@ -402,7 +402,7 @@ EOH
           env {
             MARIADB_USER = "bn_wordpress"
             MARIADB_DATABASE = "bitnami_wordpress"
-            ALLOW_EMPTY_PASSWORD = "yes"
+            # ALLOW_EMPTY_PASSWORD = "yes"
           }
 
           template {
