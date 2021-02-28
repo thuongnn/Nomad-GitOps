@@ -402,6 +402,10 @@ EOH
           env {
             MARIADB_USER = "bn_wordpress"
             MARIADB_DATABASE = "bitnami_wordpress"
+
+            MYSQL_CLIENT_CREATE_DATABASE_NAME = "werd"
+            MYSQL_CLIENT_CREATE_DATABASE_USER = "bn_wordpress"
+
             # ALLOW_EMPTY_PASSWORD = "yes"
           }
 
@@ -410,6 +414,7 @@ EOH
 MARIADB_PASSWORD="${var.DB_PASSWORD}"
 WORDPRESS_DATABASE_PASSWORD="${var.DB_PASSWORD}"
 MARIADB_ROOT_PASSWORD="${var.DB_PASSWORD}"
+MYSQL_CLIENT_CREATE_DATABASE_PASSWORD="${var.DB_PASSWORD}"
 EOH
             destination = "secrets/file.env"
             env         = true
