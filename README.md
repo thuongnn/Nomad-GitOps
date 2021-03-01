@@ -48,7 +48,6 @@ NOMAD_VAR_HEALTH_TIMEOUT
 NOMAD_VAR_HOME
 NOMAD_VAR_HOSTNAMES
 NOMAD_VAR_MEMORY
-NOMAD_VAR_MYSQL
 NOMAD_VAR_NO_DEPLOY
 NOMAD_VAR_PG
 NOMAD_VAR_PORTS
@@ -190,25 +189,6 @@ Requirements:
 ```bash
 sleep 10  &&  \
 echo DATABASE_URL=postgres://postgres:${POSTGRESQL_PASSWORD}@$(cat /alloc/data/*-db.ip):5432/production >| .env && \
-```
-
-### MySQL / mariaDB
-Requirements:
-- set environment variables in your project's `.gitlab-ci.yml`:
-  - `NOMAD_VAR_MYSQL`
-  - `NOMAD_VAR_PV`
-  - `NOMAD_VAR_PV_DB`
-- set masked environment variables in your project's CI/CD Settings (see `Secrets` section above):
-  - `NOMAD_SECRET_DB_PASSWORD`
-- also, for 2nd (DB) container, set masked CI/CD var (same value as above):
-  - `NOMAD_VAR_DB_PASSWORD`
-- Your main/webapp container can find the DB IP addressd in its `Dockerfile`'s `CMD` line to setup DB access.
-  NOTE: The sleep should ensure `/alloc/data/*-db.ip` file gets created by DB Task 1st healthcheck
-  which the webapp Task (above) can read.
-```bash
-sleep 10  &&  \
-export MARIADB_HOST=$(cat /alloc/data/*-db.ip)  &&  \
-/app-entrypoint.sh httpd -f /opt/bitnami/apache/conf/httpd.conf -DFOREGROUND
 ```
 
 

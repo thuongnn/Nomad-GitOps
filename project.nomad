@@ -44,9 +44,6 @@ variables {
   # used in conjunction with PG and PV_DB variables (below)
   POSTGRESQL_PASSWORD = ""
 
-  # used in conjunction with MYSQL and PV_DB variables (below)
-  DB_PASSWORD = ""
-
   # There are more variables immediately after this - but they are "lists" or "maps" and need
   # special definitions to not have defaults or overrides be treated as strings.
 }
@@ -97,11 +94,6 @@ variable "PG" {
   type = map(string)
   default = {}
 }
-variable "MYSQL" {
-  # Setup a mysql DB like NOMAD_VAR_MYSQL='{ 3306 = "dbmy" }' - or override port number if desired
-  type = map(string)
-  default = {}
-}
 
 
 locals {
@@ -148,7 +140,7 @@ job "NOMAD_VAR_SLUG" {
         dynamic "port" {
           # port.key == portnumber
           # port.value == portname
-          for_each = merge(var.PORTS, var.PG, var.MYSQL, {})
+          for_each = merge(var.PORTS, var.PG, {})
           labels = [ "${port.value}" ]
           content {
             to = port.key
@@ -371,83 +363,6 @@ EOH
               command  = "/usr/bin/pg_isready"
               args     = ["-Upostgres", "-h", "127.0.0.1", "-p", "${task.key}"]
               interval = "10s"
-              timeout  = "10s"
-            }
-          } # end service
-
-          volume_mount {
-            volume      = "${element(keys(var.PV_DB), 0)}"
-            destination = "${element(values(var.PV_DB), 0)}"
-            read_only   = false
-          }
-        } # end content
-      } # end dynamic "task"
-
-
-
-      # Optional add-on mysql/maria DB.  @see README.md for more details to enable.
-      dynamic "task" {
-        # task.key == DB port number
-        # task.value == DB name like 'dbmy'
-        for_each = var.MYSQL
-        labels = ["${var.SLUG}-db"]
-        content {
-          # https://github.com/bitnami/bitnami-docker-wordpress
-          driver = "docker"
-
-          config {
-            image = "bitnami/mariadb" # :10.3-debian-10
-          }
-
-          env {
-            MARIADB_USER = "bn_wordpress"
-            MARIADB_DATABASE = "bitnami_wordpress"
-            ALLOW_EMPTY_PASSWORD = "yes"
-
-            MYSQL_CLIENT_CREATE_DATABASE_NAME = "werd"
-            MYSQL_CLIENT_CREATE_DATABASE_USER = "bn_wordpress"
-          }
-
-          template {
-            data = <<EOH
-MARIADB_PASSWORD="${var.DB_PASSWORD}"
-WORDPRESS_DATABASE_PASSWORD="${var.DB_PASSWORD}"
-MARIADB_ROOT_PASSWORD="${var.DB_PASSWORD}"
-MYSQL_CLIENT_CREATE_DATABASE_PASSWORD="${var.DB_PASSWORD}"
-EOH
-            destination = "secrets/file.env"
-            env         = true
-          }
-
-          service {
-            name = "${var.SLUG}-db"
-            port = "${task.value}"
-
-            check {
-              expose   = true
-              type     = "tcp"
-              interval = "30s"
-              timeout  = "2s"
-            }
-
-            check {
-              # This posts container's bridge IP address (starting with "172.") into
-              # an expected file that other docker container can reach this
-              # DB docker container with.
-              type     = "script"
-              name     = "setup"
-              command  = "/bin/sh"
-              args     = ["-c", "hostname -i |tee /alloc/data/${var.CI_PROJECT_PATH_SLUG}-db.ip"]
-              interval = "1h"
-              timeout  = "10s"
-            }
-
-            check {
-              type     = "script"
-              name     = "db-ping"
-              command  = "/opt/bitnami/mariadb/bin/mysqladmin"
-              args     = ["ping", "silent"]
-              interval = "30s"
               timeout  = "10s"
             }
           } # end service
