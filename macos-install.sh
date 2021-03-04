@@ -67,7 +67,7 @@ function main() {
 
 
 function config() {
-  typset -a SYSCTL; # array
+  typeset -a SYSCTL; # array
   export SYSCTL=(brew services)
 
   export DOMAIN=$(basename "${TLS_CRT?}" |rev |cut -f2- -d- |rev)
@@ -79,7 +79,7 @@ function config() {
   export PV_MAX=20
   export PV_DIR=/pv
 
-  export FIRSTIP=$(ifconfig |egrep -o 'inet [0-9\.]+' |cut -f2 -d' ' |fgrep -v 127.0.0.1)
+  export FIRSTIP=$(ifconfig |egrep -o 'inet [0-9\.]+' |cut -f2 -d' ' |fgrep -v 127.0.0 |head -1)
   export PV_DIR=/opt/nomad/pv
 
   NOMAD_HCL=/etc/nomad.d/nomad.hcl

@@ -107,7 +107,7 @@ function config() {
   [ $(uname) = "Darwin" ]  &&  export MAC=1
 
 
-  typset -a SYSCTL # array
+  typeset -a SYSCTL # array
 
   if [ $MAC ]; then
     export SYSCTL=(brew services)
@@ -131,14 +131,14 @@ function config() {
   export PV_DIR=/pv
 
   if [ $MAC ]; then
-    export FIRSTIP=$(ifconfig |egrep -o 'inet [0-9\.]+' |cut -f2 -d' ' |fgrep -v 127.0.0.1)
+    export FIRSTIP=$(ifconfig |egrep -o 'inet [0-9\.]+' |cut -f2 -d' ' |fgrep -v 127.0.0 |head -1)
     export PV_DIR=/opt/nomad/pv
 
     # setup unix counterpart default config
      NOMAD_HCL=/etc/nomad.d/nomad.hcl
     CONSUL_HCL=/etc/consul.d/consul.hcl
   else
-    export FIRSTIP=$(host ${FIRST?} | perl -ane 'print $F[3] if $F[2] eq "address"')
+    export FIRSTIP=$(host ${FIRST?} | perl -ane 'print $F[3] if $F[2] eq "address"' |head -1)
     # find daemon config files
      NOMAD_HCL=$(dpkg -L nomad  2>/dev/null |egrep ^/etc/ |egrep -m1 '\.hcl$' || echo -n '')
     CONSUL_HCL=$(dpkg -L consul 2>/dev/null |egrep ^/etc/ |egrep -m1 '\.hcl$' || echo -n '')
