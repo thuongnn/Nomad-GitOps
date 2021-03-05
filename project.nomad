@@ -314,7 +314,7 @@ job "NOMAD_VAR_SLUG" {
             # this command cant quit, so wrap w/ bash and keep it running snoozed for a year
             command = "/bin/bash"
             args = [
-              "-c", "/bin/consul kv put ${var.SLUG} \"${local.kv}\"; /bin/sleep 365d",
+              "-c", "consul kv put ${var.SLUG} \"${local.kv}\"; /bin/sleep 365d",
             ]
           }
         }
