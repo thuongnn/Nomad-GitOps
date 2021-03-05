@@ -313,9 +313,10 @@ EOH
         content {
           driver = "raw_exec"
           config {
+            # this command cant quit, so wrap w/ bash and keep it running snoozed for a year
             command = "/bin/bash"
             args = [
-              "-c", "/bin/consul kv put ${local.job_names[0]} \"${local.kv}\"; /bin/sleep 365d",
+              "-c", "/bin/consul kv put ${var.SLUG} \"${local.kv}\"; /bin/sleep 365d",
             ]
           }
         }
