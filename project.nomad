@@ -298,7 +298,7 @@ job "NOMAD_VAR_SLUG" {
               destination = "secrets/kv.env"
               env         = true
               data = <<EOH
-{{ key "${local.job_names[0]}" }}
+{{ key "${var.SLUG}" }}
 EOH
             }
           }
