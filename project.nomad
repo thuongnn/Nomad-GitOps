@@ -297,9 +297,7 @@ job "NOMAD_VAR_SLUG" {
               change_mode = "noop"
               destination = "secrets/kv.env"
               env         = true
-              data = <<EOH
-{{ key "${var.SLUG}" }}
-EOH
+              data = "{{ key \"${var.SLUG}\" }}"
             }
           }
         }

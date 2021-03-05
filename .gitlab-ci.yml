@@ -24,20 +24,6 @@ include:
   # @see https://gitlab.com/gitlab-org/cluster-integration/auto-build-image/blob/master/src/build.sh
 
 
-
-# build:
-#   stage: build
-#   before_script:
-#     - |
-#       for k in $(env |egrep ^NOMAD_SECRET_ |cut -f1 -d=); do
-#         v="${!k}"
-#         k2=$(echo $k | sed -e s/^NOMAD_SECRET_//)
-#         export $k2="$v"
-#         AUTO_DEVOPS_BUILD_IMAGE_EXTRA_ARGS="$AUTO_DEVOPS_BUILD_IMAGE_EXTRA_ARGS --build-arg ${k2}"
-#       done
-#       export AUTO_DEVOPS_BUILD_IMAGE_EXTRA_ARGS
-
-
 .nomad-vars:
   before_script:
     # make nice hostname, eg:
