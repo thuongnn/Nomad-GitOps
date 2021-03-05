@@ -67,16 +67,15 @@ deploy:
     - sed -i "s/NOMAD_VAR_SLUG/$NOMAD_VAR_SLUG/" project.hcl
     # set NOMAD_SECRETS to JSON encoded key/val hashmap of env vars starting w/ "NOMAD_SECRET_"
     # (w/ NOMAD_SECRET_ prefix omitted), then convert to HCL style hashmap string (chars ":" => "=")
-    - export NOMAD_SECRETS=$(node -e 'console.log(JSON.stringify(Object.fromEntries(Object.entries(process.env).filter(([k, v]) => k.startsWith("NOMAD_SECRET_")).map(([k ,v]) => [k.replace(/^NOMAD_SECRET_/,""), v]))))' | sed 's/":"/"="/g')
+    - echo NOMAD_SECRETS=$(node -e 'console.log(JSON.stringify(Object.fromEntries(Object.entries(process.env).filter(([k, v]) => k.startsWith("NOMAD_SECRET_")).map(([k ,v]) => [k.replace(/^NOMAD_SECRET_/,""), v]))))' | sed 's/":"/"="/g') >| /tmp/env.env
     # write current env vars starting with "CI_" to a JSON env var file
     - node -e 'console.log(JSON.stringify(Object.fromEntries(Object.entries(process.env).filter(([k, v]) => k.startsWith("CI_")))))' >| /tmp/env.json
 
-    - nomad validate -var-file=/tmp/env.json -var NOMAD_SECRETS project.hcl
-    - nomad plan     -var-file=/tmp/env.json -var NOMAD_SECRETS project.hcl 2>&1 |sed 's/\(password[^ \t]*[ \t]*\).*/\1 ... /' || echo
-    - nomad run      -var-file=/tmp/env.json -var NOMAD_SECRETS project.hcl
+    - nomad validate -var-file=/tmp/env.json -var-file=/tmp/env.env project.hcl
+    - nomad plan     -var-file=/tmp/env.json -var-file=/tmp/env.env project.hcl 2>&1 |sed 's/\(password[^ \t]*[ \t]*\).*/\1 ... /' || echo
+    - nomad run      -var-file=/tmp/env.json -var-file=/tmp/env.env project.hcl
 
-    - rm /tmp/env.json
-    - unset NOMAD_SECRETS
+    - rm /tmp/env.json /tmp/env.env
 
     - echo deployed to https://$NOMAD_VAR_HOSTNAME
 
