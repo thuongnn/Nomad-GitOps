@@ -25,17 +25,17 @@ include:
 
 
 
-build:
-  stage: build
-  before_script:
-    - |
-      for k in $(env |egrep ^NOMAD_SECRET_ |cut -f1 -d=); do
-        v="${!k}"
-        k2=$(echo $k | sed -e s/^NOMAD_SECRET_//)
-        export $k2="$v"
-        AUTO_DEVOPS_BUILD_IMAGE_EXTRA_ARGS="$AUTO_DEVOPS_BUILD_IMAGE_EXTRA_ARGS --build-arg ${k2}"
-      done
-      export AUTO_DEVOPS_BUILD_IMAGE_EXTRA_ARGS
+# build:
+#   stage: build
+#   before_script:
+#     - |
+#       for k in $(env |egrep ^NOMAD_SECRET_ |cut -f1 -d=); do
+#         v="${!k}"
+#         k2=$(echo $k | sed -e s/^NOMAD_SECRET_//)
+#         export $k2="$v"
+#         AUTO_DEVOPS_BUILD_IMAGE_EXTRA_ARGS="$AUTO_DEVOPS_BUILD_IMAGE_EXTRA_ARGS --build-arg ${k2}"
+#       done
+#       export AUTO_DEVOPS_BUILD_IMAGE_EXTRA_ARGS
 
 
 .nomad-vars:
@@ -65,8 +65,12 @@ deploy:
     - cp project.nomad project.hcl
     # Do the one current substitution nomad v1.0.3 can't do now (apparently a bug)
     - sed -i "s/NOMAD_VAR_SLUG/$NOMAD_VAR_SLUG/" project.hcl
-    # write current env vars starting with "CI_" to a JSON env var file
-    - node -e 'console.log(JSON.stringify(Object.fromEntries(Object.entries(process.env).filter(([k, v]) => k.startsWith("CI_")))))' >| /tmp/env.json
+    # set NOMAD_SECRETS to JSON encoded key/val hashmap of env vars starting w/ "NOMAD_SECRET_"
+    # (w/ NOMAD_SECRET_ prefix omitted)
+    - export NOMAD_SECRETS=$(node -e 'console.log(JSON.stringify(Object.fromEntries(Object.entries(process.env).filter(([k, v]) => k.startsWith("NOMAD_SECRET_")).map(([k ,v]) => [k.replace(/^NOMAD_SECRET_/,""), v]))))')
+    # write current env vars starting with "CI_", and NOMAD_SECRETS, to a JSON env var file
+    - node -e 'console.log(JSON.stringify(Object.fromEntries(Object.entries(process.env).filter(([k, v]) => k.startsWith("CI_") || k === "NOMAD_SECRETS"))))' >| /tmp/env.json
+    - unset NOMAD_SECRETS
 
     - nomad validate -var-file=/tmp/env.json project.hcl
     - nomad plan     -var-file=/tmp/env.json project.hcl 2>&1 |sed 's/\(password[^ \t]*[ \t]*\).*/\1 ... /' || echo
