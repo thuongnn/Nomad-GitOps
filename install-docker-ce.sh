@@ -5,6 +5,9 @@
 VER="=18.06.1~ce~3-0~ubuntu"
 VER=
 
+[ "$( docker -v 2> /dev/null )" = "" ]  ||  echo 'docker already installed - exiting'
+[ "$( docker -v 2> /dev/null )" = "" ]  ||  exit 0
+
 sudo apt-get -yqq update
 sudo apt-get -yqq install \
   apt-transport-https \
