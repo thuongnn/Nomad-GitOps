@@ -26,15 +26,19 @@ include:
 
 .nomad-vars:
   before_script:
-    # make nice hostname, eg:
-    #   services-timemachine.x.archive.org
-    #   ia-petabox-webdev-3939-fix-things.x.archive.org
-    # and a unique slug that factors in group, project, and branch (when not master)
+    # make a nice "slug" that is like [GROUP]-[PROJECT]-[BRANCH], each component also "slugged",
+    # where "-master" is omitted.  respect DNS limit of 63 max chars.
     - export BRANCH_PART=""
     - if [ "$CI_COMMIT_REF_SLUG" != "master" ]; then export BRANCH_PART="-${CI_COMMIT_REF_SLUG}"; fi
     - export NOMAD_VAR_SLUG=$(echo "${CI_PROJECT_PATH_SLUG}${BRANCH_PART}" |cut -b1-63)
-    - export NOMAD_VAR_HOSTNAME="${NOMAD_VAR_SLUG}.${KUBE_INGRESS_BASE_DOMAIN}"
-    - if [ "$NOMAD_VAR_HOSTNAMES" = "" ]; then export NOMAD_VAR_HOSTNAMES='["'$NOMAD_VAR_HOSTNAME'"]'; fi
+    # make nice (semantic) hostname, based on the slug, eg:
+    #   services-timemachine.x.archive.org
+    #   ia-petabox-webdev-3939-fix-things.x.archive.org
+    # however, if repo has list of 1+ custom hostnames it wants to use instead, use them and
+    # log during [deploy] phase the first hostname in the list
+    - export HOSTNAME="${NOMAD_VAR_SLUG}.${KUBE_INGRESS_BASE_DOMAIN}"
+    - if [ "$NOMAD_VAR_HOSTNAMES" != "" ]; then export HOSTNAME=$(echo "$NOMAD_VAR_HOSTNAMES" |cut -f1 -d, |tr -d '[]" ' |tr -d "'"); fi
+    - if [ "$NOMAD_VAR_HOSTNAMES" = "" ]; then export NOMAD_VAR_HOSTNAMES='["'$HOSTNAME'"]'; fi
 
 
 deploy:
@@ -42,7 +46,7 @@ deploy:
   stage: deploy
   script:
     - echo using nomad cluster $NOMAD_ADDR
-    - echo deploying to https://$NOMAD_VAR_HOSTNAME
+    - echo deploying to https://$HOSTNAME
 
     # You can have your own/custom `project.nomad` in the top of your repo - or we'll just use
     # this fully parameterized nice generic 'house style' project
@@ -63,11 +67,11 @@ deploy:
 
     - rm /tmp/env.json /tmp/env.env
 
-    - echo deployed to https://$NOMAD_VAR_HOSTNAME
+    - echo deployed to https://$HOSTNAME
 
   environment:
     name: $CI_COMMIT_REF_SLUG
-    url: https://$NOMAD_VAR_HOSTNAME
+    url: https://$HOSTNAME
     on_stop: stop_review
   rules:
     - if: '$NOMAD_VAR_NO_DEPLOY'
