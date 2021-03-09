@@ -7,7 +7,7 @@
 locals {
   # contruct long string robotically
   ports = [443, 8012, 4245, 6881, 6969, 99]
-  addrs = join(",", [for po in local.ports : ":${po};cs=my-certs;type=path;cert=/etc/fabio/ssl"])
+  addrs = join(",", [for po in local.ports : "127.0.0.1:${po};cs=my-certs;type=path;cert=/etc/fabio/ssl"])
 }
 
 job "fabio" {
@@ -20,7 +20,7 @@ job "fabio" {
         command = "fabio"
         args    = [
           "-proxy.cs", "cs=my-certs;type=path;cert=/etc/fabio/ssl",
-          "-proxy.addr", "${local.addrs},:80",
+          "-proxy.addr", "${local.addrs},127.0.0.1:80",
           # setup HSTS headers - ensuring all services only communicate with https
           "-proxy.header.sts.maxage", "15724800",
           "-proxy.header.sts.subdomains",
