@@ -34,11 +34,15 @@ include:
     # make nice (semantic) hostname, based on the slug, eg:
     #   services-timemachine.x.archive.org
     #   ia-petabox-webdev-3939-fix-things.x.archive.org
-    # however, if repo has list of 1+ custom hostnames it wants to use instead, use them and
-    # log during [deploy] phase the first hostname in the list
+    # however, if repo has list of 1+ custom hostnames it wants to use instead for master branch
+    # review app, then use them and log during [deploy] phase the first hostname in the list
     - export HOSTNAME="${NOMAD_VAR_SLUG}.${KUBE_INGRESS_BASE_DOMAIN}"
-    - if [ "$NOMAD_VAR_HOSTNAMES" != "" ]; then export HOSTNAME=$(echo "$NOMAD_VAR_HOSTNAMES" |cut -f1 -d, |tr -d '[]" ' |tr -d "'"); fi
-    - if [ "$NOMAD_VAR_HOSTNAMES" = "" ]; then export NOMAD_VAR_HOSTNAMES='["'$HOSTNAME'"]'; fi
+    - |
+      if [ "$NOMAD_VAR_HOSTNAMES" != ""  -a  "$CI_COMMIT_REF_SLUG" = "master" ]; then
+        export HOSTNAME=$(echo "$NOMAD_VAR_HOSTNAMES" |cut -f1 -d, |tr -d '[]" ' |tr -d "'")
+      else
+        export NOMAD_VAR_HOSTNAMES='["'$HOSTNAME'"]'
+      fi
 
 
 deploy:
