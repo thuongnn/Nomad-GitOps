@@ -107,10 +107,9 @@ function config() {
   [ $(uname) = "Darwin" ]  &&  export MAC=1
 
 
-  typeset -a SYSCTL # array
-
   if [ $MAC ]; then
-    export SYSCTL=(brew services)
+    SYSCTL1=brew
+    SYSCTL2=services
     if [ "$TLS_CRT" = "" ]; then
       local DOMAIN=$(echo "$FIRST" |cut -f2- -d.)
     else
@@ -118,7 +117,8 @@ function config() {
       export FIRST=nom.${DOMAIN?}
     fi
   else
-    export SYSCTL=(systemctl)
+    SYSCTL1=systemctl
+    SYSCTL2=
     if [ "$FIRST" = "" ]; then
       export FIRST=$(hostname -f)
     fi
@@ -270,9 +270,9 @@ function customize2() {
   #   "No installed keys could decrypt the message"
   # try either (depending on nomad or consul) inspecting all nodes' contents of file) and:
   # sudo rm /opt/nomad/data/server/serf.keyring
-  # sudo ${SYSCTL?} restart  nomad
+  # sudo ${SYSCTL1?} ${SYSCTL2?} restart  nomad
   sudo rm /opt/consul/serf/local.keyring
-  sudo ${SYSCTL?} restart  consul
+  sudo ${SYSCTL1?} ${SYSCTL2?} restart  consul
 
   # and try again manually
   # (All servers need the same contents)
@@ -360,7 +360,7 @@ encrypt = "'${TOK_C?}'"
 retry_join = ["'${FIRSTIP?}'"]
 ' | sudo tee -a  $CONSUL_HCL
 
-  sudo ${SYSCTL?} restart consul  &&  sleep 10
+  sudo ${SYSCTL1?} ${SYSCTL2?} restart consul  &&  sleep 10
 }
 
 
@@ -370,7 +370,7 @@ function setup-nomad() {
 
   ( configure-nomad ) | sudo tee -a $NOMAD_HCL
 
-  sudo ${SYSCTL?} restart nomad  &&  sleep 10  ||  echo 'moving on ...'
+  sudo ${SYSCTL1?} ${SYSCTL2?} restart nomad  &&  sleep 10  ||  echo 'moving on ...'
 }
 
 
@@ -517,12 +517,10 @@ function setup-misc() {
   # This gets us DNS resolving on archive.org VMs, at the VM level (not inside containers)-8
   # for hostnames like:
   #   services-clusters.service.consul
-  if [ ! $MAC ]; then
-    [ -e /etc/dnsmasq.d/ ]  &&  (
-      echo "server=/consul/127.0.0.1#8600" |sudo tee /etc/dnsmasq.d/nomad
-      sudo $SYSCTL restart dnsmasq
-      sleep 2
-    )
+  if [ ! $MAC  -a  -e /etc/dnsmasq.d/ ]; then
+    echo "server=/consul/127.0.0.1#8600" |sudo tee /etc/dnsmasq.d/nomad
+    sudo ${SYSCTL1?} ${SYSCTL2?} restart dnsmasq
+    sleep 2
   fi
 }
 
@@ -538,8 +536,8 @@ function setup-daemons() {
     sed -i -e 's|<string>-bind</string>||'      /usr/local/Cellar/consul/*/*plist
     sed -i -e 's|<string>127.0.0.1</string>||'  /usr/local/Cellar/consul/*/*plist
 
-    sudo ${SYSCTL?} start nomad
-    sudo ${SYSCTL?} start consul
+    sudo ${SYSCTL1?} ${SYSCTL2?} start nomad
+    sudo ${SYSCTL1?} ${SYSCTL2?} start consul
   else
     sudo systemctl daemon-reload
     sudo systemctl enable  consul  nomad
@@ -591,7 +589,7 @@ function setup-dnsmasq() {
   # sets up a wildcard dns domain to resolve to your mac
   # inspiration:
   #   https://hedichaibi.com/how-to-setup-wildcard-dev-domains-with-dnsmasq-on-a-mac/
-  [ $MAC ]  ||  return
+  [ $MAC ]  ||  return 0
 
   brew install dnsmasq
 
