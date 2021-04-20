@@ -401,7 +401,7 @@ EOH
             check {
               type     = "script"
               name     = "db-ready"
-              command  = "/usr/bin/pg_isready"
+              command  = "/opt/bitnami/postgresql/bin/pg_isready"
               args     = ["-Upostgres", "-h", "127.0.0.1", "-p", "${task.key}"]
               interval = "10s"
               timeout  = "10s"
