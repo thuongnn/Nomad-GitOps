@@ -40,6 +40,9 @@ proto tcp dport 6969 ACCEPT;
 #   dweb wolk:
 proto tcp dport 99 ACCEPT;
 
+#   services/lcp:
+proto tcp dport 8989 ACCEPT;
+proto tcp dport 8990 ACCEPT;
 
 
 # ===== CLUSTER OPEN ======================================================================
