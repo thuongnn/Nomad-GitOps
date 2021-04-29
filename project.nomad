@@ -16,7 +16,7 @@ variables {
 
 
   # This autogenerates from https://gitlab.com/internetarchive/nomad/-/blob/master/.gitlab-ci.yml
-  # This will normally have "-$CI_COMMIT_REF_SLUG" appended, but is omitted for "master" branch.
+  # & normally has "-$CI_COMMIT_REF_SLUG" appended, but is omitted for "main" or "master" branches.
   # You should not change this.
   SLUG = "internetarchive-bai"
 
@@ -123,7 +123,7 @@ locals {
 }
 
 
-# NOTE: for master branch: NOMAD_VAR_SLUG === CI_PROJECT_PATH_SLUG
+# NOTE: for main or master branch: NOMAD_VAR_SLUG === CI_PROJECT_PATH_SLUG
 job "NOMAD_VAR_SLUG" {
   datacenters = ["dc1"]
 

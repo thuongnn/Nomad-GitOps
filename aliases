@@ -93,6 +93,7 @@ function nom-cp() {
   echo
 
 
+  [ "$BRANCH" = "main"   ]  &&  [ $VSCODE ]  &&  ( set -x; rsync "$@" )  &&  exit 0
   [ "$BRANCH" = "master" ]  &&  [ $VSCODE ]  &&  ( set -x; rsync "$@" )  &&  exit 0
 
   [ "$JOB" = ""  -o  "$ALLOC" = "" ]  &&  (
@@ -215,7 +216,7 @@ function nom-job-from-cwd() {
   BRANCH=$(git rev-parse --abbrev-ref HEAD)
 	SLUG=$(echo "$BRANCH" |tr '/_.' '-' |tr A-Z a-z)
   JOB=$GROUP_PROJECT
-  [ "$SLUG" = "master" ]  ||  JOB="${JOB}-${SLUG}"
+  [ "$SLUG" = "main" -o "$SLUG" = "master" ]  ||  JOB="${JOB}-${SLUG}"
   echo $(echo "$JOB" |cut -b1-63)
 }
 
