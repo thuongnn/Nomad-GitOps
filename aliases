@@ -96,10 +96,8 @@ function nom-cp() {
   [ "$BRANCH" = "main"   ]  &&  [ $VSCODE ]  &&  ( set -x; rsync "$@" )  &&  exit 0
   [ "$BRANCH" = "master" ]  &&  [ $VSCODE ]  &&  ( set -x; rsync "$@" )  &&  exit 0
 
-  [ "$JOB" = ""  -o  "$ALLOC" = "" ]  &&  (
-    echo 'has this branch run a full pipeline and deployed a Review App yet?'
-    exit 1 # no relevant job & alloc found - nothing to do
-  )
+  [ "$JOB" = ""  -o  "$ALLOC" = "" ]  &&  echo 'has this branch run a full pipeline and deployed a Review App yet?'
+  [ "$JOB" = ""  -o  "$ALLOC" = "" ]  &&  exit 0 # no relevant job & alloc found - nothing to do
 
   cat "$FILE" | ( set -x; nomad alloc exec -i -task $TASK "$ALLOC" sh -c "cat >| '$REST'" )
 }
