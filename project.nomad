@@ -96,7 +96,7 @@ variable "PG" {
 }
 
 variable "NOMAD_SECRETS" {
-  # this is automatically populated with NOMAD_SECRET_ env vars by @see project.nomad
+  # this is automatically populated with NOMAD_SECRET_ env vars by @see .gitlab-ci.yml
   type = map(string)
   default = {}
 }
@@ -310,12 +310,13 @@ job "NOMAD_VAR_SLUG" {
         labels = ["kv"]
         content {
           driver = "raw_exec"
+          lifecycle {
+            # ensures the following command runs _before_ the main task starts
+            hook = "prestart"
+          }
           config {
-            # this command cant quit, so wrap w/ bash and keep it running snoozed for a year
-            command = "/bin/bash"
-            args = [
-              "-c", "consul kv put ${var.SLUG} \"${local.kv}\"; /bin/sleep 365d",
-            ]
+            command = "/usr/bin/consul"
+            args = [ "kv", "put", ${var.SLUG}, "\"${local.kv}\"" ]
           }
         }
       }
