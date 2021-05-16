@@ -316,7 +316,7 @@ job "NOMAD_VAR_SLUG" {
           }
           config {
             command = "/usr/bin/consul"
-            args = [ "kv", "put", ${var.SLUG}, "\"${local.kv}\"" ]
+            args = [ "kv", "put", var.SLUG, "\"${local.kv}\"" ]
           }
         }
       }
