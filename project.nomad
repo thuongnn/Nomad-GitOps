@@ -313,6 +313,7 @@ job "NOMAD_VAR_SLUG" {
           lifecycle {
             # ensures the following command runs _before_ the main task starts
             hook = "prestart"
+            sidecar = false
           }
           config {
             command = "/usr/bin/consul"
