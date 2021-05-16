@@ -273,6 +273,7 @@ function customize2() {
   # sudo ${SYSCTL1?} ${SYSCTL2?} restart  nomad
   sudo rm /opt/consul/serf/local.keyring
   sudo ${SYSCTL1?} ${SYSCTL2?} restart  consul
+  sleep 10
 
   # and try again manually
   # (All servers need the same contents)
@@ -500,7 +501,7 @@ export NOMAD_TOKEN="$(fgrep 'Secret ID' $NOMACL |cut -f2- -d= |tr -d ' ') |tee $
 
 
 function setup-misc() {
-  [ $MAC ]  ||  ${MYDIR?}/ports-unblock.sh
+  [ $MAC ]  ||  [ ! -e /etc/ferm ]  ||  ${MYDIR?}/ports-unblock.sh
   [ $MAC ]  ||  sudo service docker restart  ||  echo 'no docker yet'
 
   [ ${COUNT?} -eq 0 ]  &&  (
