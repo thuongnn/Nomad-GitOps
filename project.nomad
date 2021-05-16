@@ -310,14 +310,8 @@ job "NOMAD_VAR_SLUG" {
         labels = ["kv"]
         content {
           driver = "raw_exec"
-          lifecycle {
-            # ensures the following command runs _before_ the main task starts
-            hook = "prestart"
-            sidecar = false
-          }
-          # sigh, _even in_ in raw_exec mode, this 'prestart' command _still_ cant quit 🤦‍♀️,
-          # so wrap w/ bash and keep it running snoozed for a year
           config {
+            # this command cant quit, so wrap w/ bash and keep it running snoozed for a year
             command = "/bin/bash"
             args = [
               "-c", "consul kv put ${var.SLUG} \"${local.kv}\"; /bin/sleep 365d",
