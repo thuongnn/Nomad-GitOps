@@ -303,13 +303,32 @@ job "NOMAD_VAR_SLUG" {
         }
       } # end dynamic "task"
 
+      // dynamic "task" {
+      //   # when a job has CI/CD secrets - eg: CI/CD Variables named like "NOMAD_SECRET_..."
+      //   # then here is where we dynamically insert them into consul (as a single JSON k/v string)
+      //   for_each = slice(keys(var.NOMAD_SECRETS), 0, min(1, length(keys(var.NOMAD_SECRETS))))
+      //   labels = ["kv"]
+      //   content {
+      //     driver = "raw_exec"
+      //     lifecycle {
+      //       # ensures the following command runs _before_ the main task starts
+      //       hook = "prestart"
+      //       sidecar = false
+      //     }
+      //     config {
+      //       command = "/usr/bin/consul"
+      //       args = [ "kv", "put", var.SLUG, "\"${local.kv}\"" ]
+      //     }
+      //   }
+      // }
+
       dynamic "task" {
         # when a job has CI/CD secrets - eg: CI/CD Variables named like "NOMAD_SECRET_..."
         # then here is where we dynamically insert them into consul (as a single JSON k/v string)
         for_each = slice(keys(var.NOMAD_SECRETS), 0, min(1, length(keys(var.NOMAD_SECRETS))))
-        labels = ["kv"]
+        labels = ["xxx"]
         content {
-          driver = "raw_exec"
+          driver = "exec"
           lifecycle {
             # ensures the following command runs _before_ the main task starts
             hook = "prestart"
@@ -318,6 +337,7 @@ job "NOMAD_VAR_SLUG" {
           config {
             command = "/usr/bin/consul"
             args = [ "kv", "put", var.SLUG, "\"${local.kv}\"" ]
+            pid_mode = "host"
           }
         }
       }
