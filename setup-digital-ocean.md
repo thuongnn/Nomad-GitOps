@@ -1,7 +1,7 @@
 # setup nomad & consul on digital ocean for $5
 
-**Ideally** you can point a wildcard DNS domain to your rented VM, and create
-[make Lets Encrypt https certs](https://gitlab.com/internetarchive/nomad/-/blob/master/create-https-certs.sh)
+**Ideally** you can point a wildcard DNS domain to your rented VM, and 
+[create Lets Encrypt https certs](https://gitlab.com/internetarchive/nomad/-/blob/master/create-https-certs.sh)
 files to start.
 
 **Alternatively**
