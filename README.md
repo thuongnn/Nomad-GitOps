@@ -115,13 +115,27 @@ variables:
   - basic https works now if the certs are managed independently (and passed into fabio)
 
 
-## setup cluster
+## Setup a Nomad Cluster
 - [setup.sh](setup.sh)
 - you can customize the install with these environment variables:
   - `NFSHOME=1` - setup some minor config to support a r/w `/home/` and r/o `/home/`
 
-
-## monitoring GUI urls (via ssh tunnelling above)
+Options:
+- have DNS domain you can point to a VM?
+  - nomad/consul with $5/mo VM (or on-prem)
+    - [[1/2] Setup GitLab, Nomad, Consul & Fabio](https://archive.org/~tracey/slides/devops/2021-03-31)
+    - [[2/2] Add GitLab Runner & Setup full CI/CD pipelines](https://archive.org/~tracey/slides/devops/2021-04-07)
+- have DNS domain and want on-prem GitLab?
+  - nomad/consul/gitlab/runners with $20/mo VM (or on-prem)
+    - [[1/2] Setup GitLab, Nomad, Consul & Fabio](https://archive.org/~tracey/slides/devops/2021-03-31)
+    - [[2/2] Add GitLab Runner & Setup full CI/CD pipelines](https://archive.org/~tracey/slides/devops/2021-04-07)
+- no DNS - run on mac/linux laptop?
+  - [[1/3] setup GitLab & GitLab Runner on your Mac](https://archive.org/~tracey/slides/devops/2021-02-17)
+  - [[2/3] setup Nomad & Consul on your Mac](https://archive.org/~tracey/slides/devops/2021-02-24)
+  - [[3/3] connect: GitLab, GitLab Runner, Nomad & Consul](https://archive.org/~tracey/slides/devops/2021-03-10)
+  
+  
+  ## monitoring GUI urls (via ssh tunnelling above)
 - @see [aliases](aliases)  `nom-tunnel`
 - http://localhost:8500  # consul
 - http://localhost:9998  # fabio
