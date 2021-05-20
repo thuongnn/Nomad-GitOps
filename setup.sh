@@ -17,13 +17,14 @@
 # you can manually run the lines from `config`, then `add-nodes`
 # where you set environment variables like this:
 #   NODES=(h3 h4)
-#   MYDIR=[set to wherever your nomad clone lives]
 #   FIRST=[fully qualified DNS name of your first node]
 #   CLUSTER_SIZE=2
-#   INITIAL_CLUSTER_SIZE=2
+#   INITIAL_CLUSTER_SIZE=3
 
 MYDIR=${0:a:h}
 
+# where supporting scripts live and will get pulled from
+RAW=https://gitlab.com/internetarchive/nomad/-/raw/master
 
 [ $# -lt 1 ]  &&  echo "
 usage: $0  [TLS_CRT file]  [TLS_KEY file]  <node 2>  <node 3>  ..
@@ -32,7 +33,6 @@ usage: $0  [TLS_CRT file]  [TLS_KEY file]  <node 2>  <node 3>  ..
 [TLS_KEY file] - file location. wildcard domain PEM format.  May need to prepend '[SERVER]:' for rsync..)
 
 Run this script on FIRST node in your cluster, while ssh-ed in.
-(git clone this repo somewhere in the same place on all your cluster nodes.)
 
 If invoking cmd-line has env var NFSHOME=1 then we'll setup /home/ r/o and r/w mounts.
 
@@ -58,17 +58,7 @@ unset   NOMAD_ADDR
 
 
 function main() {
-  if [ "$1" = "baseline"  -o  "$1" = "customize"  -o  "$1" = "customize2" ]; then
-    set -x
-    FIRST=$2
-    COUNT=$3
-    CLUSTER_SIZE=$4
-
-    config
-
-    "$1"
-    exit 0
-  else
+  if [ "$1" != "baseline"  -a  "$1" != "baseline-nomad" ]; then
     TLS_CRT=$1  # @see create-https-certs.sh - fully qualified path to crt file it created
     TLS_KEY=$2  # @see create-https-certs.sh - fully qualified path to key file it created
     shift
@@ -79,24 +69,47 @@ function main() {
     set -x
     config
 
-    typeset -a $NODES
-    NODES=( ${FIRST?} "$@" )
+    COUNT=${INITIAL_CLUSTER_SIZE?}
 
     # use the TLS_CRT and TLS_KEY params
-    ( COUNT=0 setup-certs )
+    setup-certs
 
-    add-nodes
+
+    # setup baseline & get consul up/ running *first* -- so can use consul for nomad bootstraping
+    # https://learn.hashicorp.com/tutorials/nomad/clustering#use-consul-to-automatically-cluster-nodes
+    typeset -a $NODES
+    NODES=( ${FIRST?} "$@" )
+    for NODE in ${NODES?}; do
+      # copy ourself / this script over to the node first, then run it
+      cat ${MYDIR?}/setup.sh | run-on $NODE 'tee /tmp/setup.sh >/dev/null && chmod +x /tmp/setup.sh'
+      run-on $NODE env NFSHOME=$NFSHOME /tmp/setup.sh baseline ${FIRST?} ${COUNT?} ${CLUSTER_SIZE?}
+      let "COUNT=$COUNT+1"
+    done
+
+
+    # now get nomad configured and up
+    COUNT=${INITIAL_CLUSTER_SIZE?}
+    for NODE in ${NODES?}; do
+      run-on $NODE env NFSHOME=$NFSHOME /tmp/setup.sh baseline-nomad ${FIRST?} ${COUNT?} ${CLUSTER_SIZE?}
+      let "COUNT=$COUNT+1"
+    done
+
 
     finish
-    exit 0
-  fi
+  else
+    set -x
+    FIRST=$2
+    COUNT=$3
+    CLUSTER_SIZE=$4
 
-  exit 0
+    config
+
+    "$1"
+  fi
 }
 
 
 function config() {
-  export NOMAD_COUNT=${CLUSTER_SIZE?}
   export CONSUL_COUNT=${CLUSTER_SIZE?}
 
   # We will put PV on 1st server
@@ -160,31 +173,6 @@ function run-on() {
 }
 
 
-function add-nodes() {
-  # install & setup stock nomad & consul
-  COUNT=${INITIAL_CLUSTER_SIZE?}
-  for NODE in ${NODES?}; do
-    run-on $NODE env NFSHOME=$NFSHOME ${MYDIR?}/setup.sh baseline ${FIRST?} ${COUNT?} ${CLUSTER_SIZE?}
-    let "COUNT=$COUNT+1"
-  done
-
-  # customize nomad & consul
-  # we have to make _all_ nomad servers VERY angry first, before we can get a leader and token
-  COUNT=${INITIAL_CLUSTER_SIZE?}
-  for NODE in ${NODES?}; do
-    run-on $NODE env NFSHOME=$NFSHOME ${MYDIR?}/setup.sh customize ${FIRST?} ${COUNT?} ${CLUSTER_SIZE?}
-    let "COUNT=$COUNT+1"
-  done
-
-  # 🤦‍♀️ now we can finally get them to cluster up, elect a leader, and do their f***ing job
-  COUNT=${INITIAL_CLUSTER_SIZE?}
-  for NODE in ${NODES?}; do
-    run-on $NODE env NFSHOME=$NFSHOME ${MYDIR?}/setup.sh customize2 ${FIRST?} ${COUNT?} ${CLUSTER_SIZE?}
-    let "COUNT=$COUNT+1"
-  done
-}
-
-
 function baseline() {
   cd /tmp
 
@@ -219,58 +207,44 @@ ui = true
 
   else
 
+    sudo apt-get -yqq install  wget
+
     # install docker if not already present
-    $MYDIR/install-docker-ce.sh
+    getr install-docker-ce.sh
+    /tmp/install-docker-ce.sh
 
 
     curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
     sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
     sudo apt-get -yqq update
 
-    sudo apt-get -yqq install  nomad  consul
+    sudo apt-get -yqq install  consul
   fi
 
   config
 
   # restore original config (if reran)
-  [ -e  $NOMAD_HCL.orig ]  &&  sudo cp -p  $NOMAD_HCL.orig  $NOMAD_HCL
   [ -e $CONSUL_HCL.orig ]  &&  sudo cp -p $CONSUL_HCL.orig $CONSUL_HCL
 
-
   # stash copies of original config
-  sudo cp -p  $NOMAD_HCL  $NOMAD_HCL.orig
   sudo cp -p $CONSUL_HCL $CONSUL_HCL.orig
 
 
-  # start up uncustomized versions of nomad and consul
+  # start up uncustomized version of consul
   setup-dnsmasq
   setup-certs
   setup-misc
   setup-daemons
-}
 
 
-function customize() {
-  setup-nomad
   setup-consul
-}
 
 
-function customize2() {
   echo "================================================================================"
   consul members
   echo "================================================================================"
-  nomad-env-vars
-  nomad server members
-  echo "================================================================================"
 
 
-
-  # NOTE: if you see failures join-ing and messages like:
-  #   "No installed keys could decrypt the message"
-  # try either (depending on nomad or consul) inspecting all nodes' contents of file) and:
-  # sudo rm /opt/nomad/data/server/serf.keyring
-  # sudo ${SYSCTL1?} ${SYSCTL2?} restart  nomad
   sudo rm /opt/consul/serf/local.keyring
   sudo ${SYSCTL1?} ${SYSCTL2?} restart  consul
   sleep 10
@@ -282,6 +256,32 @@ function customize2() {
 
   echo "================================================================================"
   ( set -x; consul members )
+  echo "================================================================================"
+}
+
+
+function baseline-nomad {
+  sudo apt-get -yqq install  nomad
+
+  config
+
+  [ -e  $NOMAD_HCL.orig ]  &&  sudo cp -p  $NOMAD_HCL.orig  $NOMAD_HCL
+  sudo cp -p  $NOMAD_HCL  $NOMAD_HCL.orig
+
+  [ $MAC ]  ||  sudo systemctl daemon-reload
+  [ $MAC ]  ||  sudo systemctl enable  nomad
+
+  setup-certs
+
+  setup-nomad
+  # NOTE: if you see failures join-ing and messages like:
+  #   "No installed keys could decrypt the message"
+  # try either (depending on nomad or consul) inspecting all nodes' contents of file) and:
+  # sudo rm /opt/nomad/data/server/serf.keyring
+  # sudo ${SYSCTL1?} ${SYSCTL2?} restart  nomad
+
+
+  nomad-env-vars
   echo "================================================================================"
   ( set -x; nomad server members )
   echo "================================================================================"
@@ -296,8 +296,8 @@ function finish() {
 
   # ideally fabio is running in docker - but macos issues so alt "exec" driver instead of "docker"
   # https://medium.com/hashicorp-engineering/hashicorp-nomad-from-zero-to-wow-1615345aa539
-  [ $MAC ]  &&  nomad run ${MYDIR?}/etc/fabio-exec.hcl
-  [ $MAC ]  ||  nomad run ${MYDIR?}/etc/fabio.hcl
+  [ $MAC ]  &&  nomad run ${RAW?}/etc/fabio-exec.hcl
+  [ $MAC ]  ||  nomad run ${RAW?}/etc/fabio.hcl
 
 
   echo "Setup GitLab runner in your cluster?\n"
@@ -305,7 +305,8 @@ function finish() {
   read cont
 
   if [ "$cont" = "yes" ]; then
-    ${MYDIR?}/setup-runner.sh
+    getr setup-runner.sh
+    /tmp/setup-runner.sh
   fi
 
 
@@ -367,7 +368,7 @@ retry_join = ["'${FIRSTIP?}'"]
 
 function setup-nomad() {
   ## Nomad - setup the fields 'encrypt' etc. as per your cluster.
-  sudo sed -i -e 's^bootstrap_expect =.*$^bootstrap_expect = '${NOMAD_COUNT?}'^' $NOMAD_HCL
+  [ $COUNT -ge 1 ] && sudo sed -i -e 's^bootstrap_expect =.*$^^' $NOMAD_HCL
 
   ( configure-nomad ) | sudo tee -a $NOMAD_HCL
 
@@ -386,11 +387,6 @@ name = "'$(hostname -s)'"
 
 server {
   encrypt = "'${TOK_N?}'"
-
-  server_join {
-    retry_join = ["'${FIRSTIP?}'"]
-    retry_max = 0
-  }
 }
 
 # some of this could be redundant -- check defaults in node v1+
@@ -501,8 +497,13 @@ export NOMAD_TOKEN="$(fgrep 'Secret ID' $NOMACL |cut -f2- -d= |tr -d ' ') |tee $
 
 
 function setup-misc() {
-  [ $MAC ]  ||  [ ! -e /etc/ferm ]  ||  ${MYDIR?}/ports-unblock.sh
-  [ $MAC ]  ||  sudo service docker restart  ||  echo 'no docker yet'
+  if [ ! $MAC ]; then
+    if [ -e /etc/ferm ]; then
+      getr ports-unblock.sh
+      /tmp/ports-unblock.sh
+    fi
+    sudo service docker restart  ||  echo 'no docker yet'
+  fi
 
   [ ${COUNT?} -eq 0 ]  &&  (
     # One server in cluster gets marked for hosting repos with Persistent Volume requirements.
@@ -518,7 +519,7 @@ function setup-misc() {
   # This gets us DNS resolving on archive.org VMs, at the VM level (not inside containers)-8
   # for hostnames like:
   #   services-clusters.service.consul
-  if [ ! $MAC  -a  -e /etc/dnsmasq.d/ ]; then
+  if [ ! "$MAC"  -a  -e /etc/dnsmasq.d/ ]; then
     echo "server=/consul/127.0.0.1#8600" |sudo tee /etc/dnsmasq.d/nomad
     sudo ${SYSCTL1?} ${SYSCTL2?} restart dnsmasq
     sleep 2
@@ -541,7 +542,7 @@ function setup-daemons() {
     sudo ${SYSCTL1?} ${SYSCTL2?} start consul
   else
     sudo systemctl daemon-reload
-    sudo systemctl enable  consul  nomad
+    sudo systemctl enable  consul
   fi
 }
 
@@ -557,10 +558,7 @@ function setup-certs() {
 
   sudo mkdir -p           /etc/fabio/ssl/
   sudo chown root:${GRP?} /etc/fabio/ssl/
-  cat ${MYDIR?}/etc/fabio.properties |sudo tee /etc/fabio/fabio.properties
-
-  # only need to do this if fabio is running in a container:
-  # [ $MAC ] && echo "registry.consul.addr = ${FIRST?}:8500" |sudo tee -a /etc/fabio/fabio.properties
+  wget -qO- ${RAW?}/etc/fabio.properties |sudo tee /etc/fabio/fabio.properties
 
   [ $TLS_CRT ]  &&  sudo bash -c "(
     rsync -Pav ${TLS_CRT?} ${CRT?}
@@ -582,7 +580,6 @@ function setup-certs() {
   sudo cp $KEY              /opt/nomad/tls/tls.key
   sudo chown -R nomad.nomad /opt/nomad/tls  ||  echo 'future pass will work'
   sudo chmod -R go-rwx      /opt/nomad/tls
-
 }
 
 
@@ -608,6 +605,13 @@ listen-address=127.0.0.1
   # verify host lookups are working now
   #local IP=$(host udev-idev-everybodydev.x.archive.org |rev |cut -f1 -d ' ' |head -1)
   # [ "$IP" = "$FIRSTIP" ]  ||  exit 1
+}
+
+
+function getr() {
+  # gets a supporting file from main repo into /tmp/
+  wget --backups=1 -qP /tmp/ ${RAW}/"$1"
+  chmod +x /tmp/"$1"
 }
 
 
