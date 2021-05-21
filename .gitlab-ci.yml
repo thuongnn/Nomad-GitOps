@@ -68,10 +68,11 @@ deploy:
     - node -e 'console.log(JSON.stringify(Object.fromEntries(Object.entries(process.env).filter(([k, v]) => k.startsWith("CI_")))))' >| /tmp/env.json
 
     - nomad validate -var-file=/tmp/env.json -var-file=/tmp/env.env project.hcl
-    - nomad plan     -var-file=/tmp/env.json -var-file=/tmp/env.env project.hcl 2>&1 |sed 's/\(password[^ \t]*[ \t]*\).*/\1 ... /' || echo
-    - nomad run      -var-file=/tmp/env.json -var-file=/tmp/env.env project.hcl
+    - nomad plan     -var-file=/tmp/env.json -var-file=/tmp/env.env project.hcl 2>&1 |sed 's/\(password[^ \t]*[ \t]*\).*/\1 ... /' |tee /tmp/plan.log
+    - export INDEX=$(egrep -o -- '-check-index [0-9]+' /tmp/plan.log |tr -dc 0-9)
+    - nomad run      -var-file=/tmp/env.json -var-file=/tmp/env.env -check-index $INDEX project.hcl
 
-    - rm /tmp/env.json /tmp/env.env
+    - rm /tmp/env.json /tmp/env.env /tmp/plan.log
 
     - echo deployed to https://$HOSTNAME
 
