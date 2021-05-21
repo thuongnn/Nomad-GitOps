@@ -37,6 +37,18 @@ Run this script on FIRST node in your cluster, while ssh-ed in.
 If invoking cmd-line has env var NFSHOME=1 then we'll setup /home/ r/o and r/w mounts.
 
 To simplify, we'll reuse TLS certs, setting up ACL and TLS for nomad.
+
+
+MACOS:
+  Additional requirement:
+    TLS command-line args must match pattern:
+      [DOMAIN]-cert.pem
+      [DOMAIN]-key.pem
+
+  Additional step:
+  [System Preferences] [Network] [Advanced] [DNS] [DNS Servers] add '127.0.0.1' as *first* resolver
+
+
 "  &&  exit 1
 
 
@@ -69,8 +81,8 @@ function main() {
     NODES=( ${FIRST?} "$@" )
     for NODE in ${NODES?}; do
       # copy ourself / this script over to the node first, then run it
-      cat ${MYDIR?}/setup.sh | ssh $NODE 'tee /tmp/setup.sh >/dev/null && chmod +x /tmp/setup.sh'
-      ssh $NODE env NFSHOME=$NFSHOME /tmp/setup.sh baseline ${FIRST?} ${COUNT?} ${CLUSTER_SIZE?}
+      cat ${MYDIR?}/setup.sh | run-on $NODE 'tee /tmp/setup.sh >/dev/null && chmod +x /tmp/setup.sh'
+      run-on $NODE env NFSHOME=$NFSHOME /tmp/setup.sh baseline ${FIRST?} ${COUNT?} ${CLUSTER_SIZE?}
       let "COUNT=$COUNT+1"
     done
 
@@ -78,7 +90,7 @@ function main() {
     # now get nomad configured and up
     COUNT=${INITIAL_CLUSTER_SIZE?}
     for NODE in ${NODES?}; do
-      ssh $NODE env NFSHOME=$NFSHOME /tmp/setup.sh baseline-nomad ${FIRST?} ${COUNT?} ${CLUSTER_SIZE?}
+      run-on $NODE env NFSHOME=$NFSHOME /tmp/setup.sh baseline-nomad ${FIRST?} ${COUNT?} ${CLUSTER_SIZE?}
       let "COUNT=$COUNT+1"
     done
 
@@ -104,13 +116,26 @@ function config() {
   # We will put LB/fabio on all servers
   export LB_COUNT=${CLUSTER_SIZE?}
 
+  export MAC=
+  [ $(uname) = "Darwin" ]  &&  export MAC=1
 
-  SYSCTL1=systemctl
-  SYSCTL2=
-  if [ "$FIRST" = "" ]; then
-    export FIRST=$(hostname -f)
+
+  if [ $MAC ]; then
+    SYSCTL1=brew
+    SYSCTL2=services
+    if [ "$TLS_CRT" = "" ]; then
+      local DOMAIN=$(echo "$FIRST" |cut -f2- -d.)
+    else
+      local DOMAIN=$(basename "${TLS_CRT?}" |rev |cut -f2- -d- |rev)
+      export FIRST=nom.${DOMAIN?}
+    fi
+  else
+    SYSCTL1=systemctl
+    SYSCTL2=
+    if [ "$FIRST" = "" ]; then
+      export FIRST=$(hostname -f)
+    fi
   fi
-
 
   export  NOMAD_ADDR="https://${FIRST?}:4646"
   export CONSUL_ADDR="http://localhost:8500"
@@ -118,10 +143,33 @@ function config() {
   export PV_MAX=20
   export PV_DIR=/pv
 
-  export FIRSTIP=$(host ${FIRST?} | perl -ane 'print $F[3] if $F[2] eq "address"' |head -1)
-  # find daemon config files
-  NOMAD_HCL=$(dpkg -L nomad  2>/dev/null |egrep ^/etc/ |egrep -m1 '\.hcl$' || echo -n '')
-  CONSUL_HCL=$(dpkg -L consul 2>/dev/null |egrep ^/etc/ |egrep -m1 '\.hcl$' || echo -n '')
+  if [ $MAC ]; then
+    export FIRSTIP=$(ifconfig |egrep -o 'inet [0-9\.]+' |cut -f2 -d' ' |fgrep -v 127.0.0 |head -1)
+    export PV_DIR=/opt/nomad/pv
+
+    # setup unix counterpart default config
+     NOMAD_HCL=/etc/nomad.d/nomad.hcl
+    CONSUL_HCL=/etc/consul.d/consul.hcl
+  else
+    export FIRSTIP=$(host ${FIRST?} | perl -ane 'print $F[3] if $F[2] eq "address"' |head -1)
+    # find daemon config files
+     NOMAD_HCL=$(dpkg -L nomad  2>/dev/null |egrep ^/etc/ |egrep -m1 '\.hcl$' || echo -n '')
+    CONSUL_HCL=$(dpkg -L consul 2>/dev/null |egrep ^/etc/ |egrep -m1 '\.hcl$' || echo -n '')
+  fi
+}
+
+
+
+function run-on() {
+  # unix: ssh to node and run a command;  mac: run command (single node cluster :-)
+  NODE="$1"
+  shift
+
+  if [ $MAC ]; then
+    ( set -x; "$@" )
+  else
+    ( set -x; ssh $NODE "$@" )
+  fi
 }
 
 
@@ -130,18 +178,48 @@ function baseline() {
 
   # install binaries and service files
   #   eg: /usr/bin/nomad  /etc/nomad.d/nomad.hcl  /usr/lib/systemd/system/nomad.service
-  sudo apt-get -yqq install  wget
+  if [ $MAC ]; then
+    brew install  nomad  consul
 
-  # install docker if not already present
-  getr install-docker-ce.sh
-  /tmp/install-docker-ce.sh
+    sudo mkdir -p $(dirname  $NOMAD_HCL)
+    sudo mkdir -p $(dirname $CONSUL_HCL)
+
+    # start with unix pkg defaults
+    echo '
+data_dir = "/opt/nomad/data"
+bind_addr = "0.0.0.0"
+server {
+  enabled = true
+  bootstrap_expect = 1
+}
+client {
+  enabled = true
+  servers = ["127.0.0.1:4646"]
+}
+' | sudo tee $NOMAD_HCL
+
+    # start with unix pkg defaults
+    echo '
+data_dir = "/opt/consul"
+client_addr = "0.0.0.0"
+ui = true
+' | sudo tee $CONSUL_HCL
+
+  else
+
+    sudo apt-get -yqq install  wget
+
+    # install docker if not already present
+    getr install-docker-ce.sh
+    /tmp/install-docker-ce.sh
 
 
-  curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
-  sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
-  sudo apt-get -yqq update
+    curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
+    sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
+    sudo apt-get -yqq update
 
-  sudo apt-get -yqq install  consul
+    sudo apt-get -yqq install  consul
+  fi
 
   config
 
@@ -153,10 +231,10 @@ function baseline() {
 
 
   # start up uncustomized version of consul
+  setup-dnsmasq
   setup-certs
   setup-misc
-  sudo systemctl daemon-reload
-  sudo systemctl enable  consul
+  setup-daemons
 
 
   setup-consul
@@ -190,8 +268,8 @@ function baseline-nomad {
   [ -e  $NOMAD_HCL.orig ]  &&  sudo cp -p  $NOMAD_HCL.orig  $NOMAD_HCL
   sudo cp -p  $NOMAD_HCL  $NOMAD_HCL.orig
 
-  sudo systemctl daemon-reload
-  sudo systemctl enable  nomad
+  [ $MAC ]  ||  sudo systemctl daemon-reload
+  [ $MAC ]  ||  sudo systemctl enable  nomad
 
   setup-certs
 
@@ -216,7 +294,10 @@ function finish() {
   sleep 30
   nomad-env-vars
 
-  nomad run ${RAW?}/etc/fabio.hcl
+  # ideally fabio is running in docker - but macos issues so alt "exec" driver instead of "docker"
+  # https://medium.com/hashicorp-engineering/hashicorp-nomad-from-zero-to-wow-1615345aa539
+  [ $MAC ]  &&  nomad run ${RAW?}/etc/fabio-exec.hcl
+  [ $MAC ]  ||  nomad run ${RAW?}/etc/fabio.hcl
 
 
   echo "Setup GitLab runner in your cluster?\n"
@@ -416,9 +497,11 @@ export NOMAD_TOKEN="$(fgrep 'Secret ID' $NOMACL |cut -f2- -d= |tr -d ' ') |tee $
 
 
 function setup-misc() {
-  if [ -e /etc/ferm ]; then
-    getr ports-unblock.sh
-    /tmp/ports-unblock.sh
+  if [ ! $MAC ]; then
+    if [ -e /etc/ferm ]; then
+      getr ports-unblock.sh
+      /tmp/ports-unblock.sh
+    fi
     sudo service docker restart  ||  echo 'no docker yet'
   fi
 
@@ -436,10 +519,30 @@ function setup-misc() {
   # This gets us DNS resolving on archive.org VMs, at the VM level (not inside containers)-8
   # for hostnames like:
   #   services-clusters.service.consul
-  if [ -e /etc/dnsmasq.d/ ]; then
+  if [ ! "$MAC"  -a  -e /etc/dnsmasq.d/ ]; then
     echo "server=/consul/127.0.0.1#8600" |sudo tee /etc/dnsmasq.d/nomad
     sudo ${SYSCTL1?} ${SYSCTL2?} restart dnsmasq
     sleep 2
+  fi
+}
+
+
+function setup-daemons() {
+  # get services ready to go
+  if [ $MAC ]; then
+    sed -i -e 's|<string>-dev</string>|<string>-config=/etc/nomad.d</string>|' \
+      /usr/local/Cellar/nomad/*/*plist
+
+    sed -i -e 's|<string>-dev</string>|<string>-config-dir=/etc/consul.d/</string>|' \
+      /usr/local/Cellar/consul/*/*plist
+    sed -i -e 's|<string>-bind</string>||'      /usr/local/Cellar/consul/*/*plist
+    sed -i -e 's|<string>127.0.0.1</string>||'  /usr/local/Cellar/consul/*/*plist
+
+    sudo ${SYSCTL1?} ${SYSCTL2?} start nomad
+    sudo ${SYSCTL1?} ${SYSCTL2?} start consul
+  else
+    sudo systemctl daemon-reload
+    sudo systemctl enable  consul
   fi
 }
 
@@ -450,8 +553,11 @@ function setup-certs() {
   local CRT=/etc/fabio/ssl/${DOMAIN?}-cert.pem
   local KEY=/etc/fabio/ssl/${DOMAIN?}-key.pem
 
-  sudo mkdir -p         /etc/fabio/ssl/
-  sudo chown root:root  /etc/fabio/ssl/
+  local GRP=root
+  [ $MAC ]  &&  GRP=wheel
+
+  sudo mkdir -p           /etc/fabio/ssl/
+  sudo chown root:${GRP?} /etc/fabio/ssl/
   wget -qO- ${RAW?}/etc/fabio.properties |sudo tee /etc/fabio/fabio.properties
 
   [ $TLS_CRT ]  &&  sudo bash -c "(
@@ -464,7 +570,7 @@ function setup-certs() {
     ssh ${FIRST?} sudo cat ${KEY?} |sudo tee ${KEY} >/dev/null
   )"
 
-  sudo chown root:root ${CRT} ${KEY}
+  sudo chown root:${GRP?} ${CRT} ${KEY}
   sudo chmod 444 ${CRT}
   sudo chmod 400 ${KEY}
 
@@ -474,6 +580,31 @@ function setup-certs() {
   sudo cp $KEY              /opt/nomad/tls/tls.key
   sudo chown -R nomad.nomad /opt/nomad/tls  ||  echo 'future pass will work'
   sudo chmod -R go-rwx      /opt/nomad/tls
+}
+
+
+function setup-dnsmasq() {
+  # sets up a wildcard dns domain to resolve to your mac
+  # inspiration:
+  #   https://hedichaibi.com/how-to-setup-wildcard-dev-domains-with-dnsmasq-on-a-mac/
+  [ $MAC ]  ||  return 0
+
+  brew install dnsmasq
+
+  local DOMAIN=$(echo ${FIRST?} |cut -f2- -d.)
+
+  echo "
+# from https://gitlab.com/internetarchive/nomad/-/blob/master/setup.sh
+
+address=/${DOMAIN?}/${FIRSTIP?}
+listen-address=127.0.0.1
+" |tee /usr/local/etc/dnsmasq.conf
+
+  sudo brew services start dnsmasq
+
+  # verify host lookups are working now
+  #local IP=$(host udev-idev-everybodydev.x.archive.org |rev |cut -f1 -d ' ' |head -1)
+  # [ "$IP" = "$FIRSTIP" ]  ||  exit 1
 }
 
 
