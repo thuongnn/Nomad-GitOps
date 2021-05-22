@@ -244,6 +244,9 @@ function setup-nomad() {
 
 
   getr etc/nomad.hcl
+  # interpolate  /tmp/nomad.hcl  to  $NOMAD_HCL
+  ( echo "cat <<EOF"; cat /tmp/nomad.hcl; echo EOF ) | sh | sudo tee $NOMAD_HCL
+  rm /tmp/nomad.hcl
 
 
   # First server in cluster gets marked for hosting repos with Persistent Volume requirements.
@@ -251,15 +254,14 @@ function setup-nomad() {
   # pass through these `/pv/` dirs from the VM/host to containers.  Each container using it
   # needs to use a unique subdir...
   # So we'll peg all deployed project(s) with PV requirements to first host.
-  for N in $(seq 1 ${PV_MAX?}); do
-    sudo mkdir -m777 -p ${PV_DIR?}/$N
-    echo 'client { host_volume "pv'$N'" { path = "'${PV_DIR?}'/'$N'" read_only = false }}' \
-      >> /tmp/nomad.hcl
-  done
-
-  # interpolate  /tmp/nomad.hcl  to  $NOMAD_HCL
-  ( echo "cat <<EOF"; cat /tmp/nomad.hcl; echo EOF ) | sh |sudo tee $NOMAD_HCL
-  rm /tmp/nomad.hcl
+  (
+    echo 'client {'
+    for N in $(seq 1 ${PV_MAX?}); do
+      sudo mkdir -m777 -p ${PV_DIR?}/$N
+      echo 'host_volume "pv'$N'" { path = "'${PV_DIR?}'/'$N'" read_only = false }' \
+    done
+    echo '}'
+  ) >> $NOMAD_HCL
 
 
   sudo systemctl restart nomad  &&  sleep 10  ||  echo 'moving on ...'
