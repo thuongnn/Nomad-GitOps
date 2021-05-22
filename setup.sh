@@ -346,7 +346,7 @@ function setup-certs() {
 function getr() {
   # gets a supporting file from main repo into /tmp/
   wget --backups=1 -qP /tmp/ ${RAW}/"$1"
-  chmod +x /tmp/"$1"
+  chmod +x /tmp/$(basename "$1")
 }
 
 
