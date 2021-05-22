@@ -201,55 +201,6 @@ function baseline-nomad {
 }
 
 
-function finish() {
-  sleep 30
-  nomad-addr-and-token
-
-  nomad run ${RAW?}/etc/fabio.hcl
-
-
-  echo "Setup GitLab runner in your cluster?\n"
-  echo "Enter 'yes' now to set up a GitLab runner in your cluster"
-  read cont
-
-  if [ "$cont" = "yes" ]; then
-    getr setup-runner.sh
-    /tmp/setup-runner.sh
-  fi
-
-
-  echo "
-
-💥 CONGRATULATIONS!  Your cluster is setup. 💥
-
-You can get started with the UI for: nomad consul fabio here:
-
-Nomad  (deployment: managements & scheduling):
-( https://www.nomadproject.io )
-$NOMAD_ADDR
-( login with NOMAD_TOKEN from $HOME/.config/nomad - keep this safe!)
-
-Consul (networking: service discovery & health checks, service mesh, envoy, secrets storage):
-( https://www.consul.io )
-$CONSUL_ADDR
-
-Fabio  (routing: load balancing, ingress/edge router, https and http2 termination (to http))
-( https://fabiolb.net )
-$FABIO_ADDR
-
-
-
-For localhost urls above - see 'nom-tunnel' alias here:
-  https://gitlab.com/internetarchive/nomad/-/blob/master/aliases
-
-To uninstall:
-  https://gitlab.com/internetarchive/nomad/-/blob/master/wipe-node.sh
-
-
-"
-}
-
-
 function setup-consul() {
   ## Consul - setup the fields 'encrypt' etc. as per your cluster.
 
@@ -396,6 +347,55 @@ function getr() {
   # gets a supporting file from main repo into /tmp/
   wget --backups=1 -qP /tmp/ ${RAW}/"$1"
   chmod +x /tmp/"$1"
+}
+
+
+function finish() {
+  sleep 30
+  nomad-addr-and-token
+
+  nomad run ${RAW?}/etc/fabio.hcl
+
+
+  echo "Setup GitLab runner in your cluster?\n"
+  echo "Enter 'yes' now to set up a GitLab runner in your cluster"
+  read cont
+
+  if [ "$cont" = "yes" ]; then
+    getr setup-runner.sh
+    /tmp/setup-runner.sh
+  fi
+
+
+  echo "
+
+💥 CONGRATULATIONS!  Your cluster is setup. 💥
+
+You can get started with the UI for: nomad consul fabio here:
+
+Nomad  (deployment: managements & scheduling):
+( https://www.nomadproject.io )
+$NOMAD_ADDR
+( login with NOMAD_TOKEN from $HOME/.config/nomad - keep this safe!)
+
+Consul (networking: service discovery & health checks, service mesh, envoy, secrets storage):
+( https://www.consul.io )
+$CONSUL_ADDR
+
+Fabio  (routing: load balancing, ingress/edge router, https and http2 termination (to http))
+( https://fabiolb.net )
+$FABIO_ADDR
+
+
+
+For localhost urls above - see 'nom-tunnel' alias here:
+  https://gitlab.com/internetarchive/nomad/-/blob/master/aliases
+
+To uninstall:
+  https://gitlab.com/internetarchive/nomad/-/blob/master/wipe-node.sh
+
+
+"
 }
 
 
