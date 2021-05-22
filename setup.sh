@@ -190,7 +190,7 @@ function baseline-nomad {
   # try either (depending on nomad or consul) inspecting all nodes' contents of file) and:
   # sudo rm /opt/nomad/data/server/serf.keyring
   # sudo systemctl restart  nomad
-
+  set +x
 
   nomad-addr-and-token
   echo "================================================================================"
@@ -258,10 +258,10 @@ function setup-nomad() {
     echo 'client {'
     for N in $(seq 1 ${PV_MAX?}); do
       sudo mkdir -m777 -p ${PV_DIR?}/$N
-      echo 'host_volume "pv'$N'" { path = "'${PV_DIR?}'/'$N'" read_only = false }' \
+      echo 'host_volume "pv'$N'" { path = "'${PV_DIR?}'/'$N'" read_only = false }'
     done
     echo '}'
-  ) >> $NOMAD_HCL
+  ) |sudo tee -a $NOMAD_HCL
 
 
   sudo systemctl restart nomad  &&  sleep 10  ||  echo 'moving on ...'
@@ -357,7 +357,7 @@ function finish() {
   nomad-addr-and-token
 
   nomad run ${RAW?}/etc/fabio.hcl
-
+  set +x
 
   echo "Setup GitLab runner in your cluster?\n"
   echo "Enter 'yes' now to set up a GitLab runner in your cluster"
