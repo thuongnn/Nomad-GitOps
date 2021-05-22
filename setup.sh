@@ -63,7 +63,8 @@ function main() {
     setup-certs
 
 
-    # setup baseline & get consul up/ running *first* -- so can use consul for nomad bootstraping
+    # Setup baseline & get consul up/ running *first* -- so can use consul for nomad bootstraping.
+    # Run "baseline" across all VMs.
     # https://learn.hashicorp.com/tutorials/nomad/clustering#use-consul-to-automatically-cluster-nodes
     typeset -a $NODES
     NODES=( ${FIRST?} "$@" )
@@ -75,7 +76,8 @@ function main() {
     done
 
 
-    # now get nomad configured and up
+    # Now get nomad configured and up.
+    # Run "baseline-nomad" on all VMs.
     COUNT=${INITIAL_CLUSTER_SIZE?}
     for NODE in ${NODES?}; do
       ssh $NODE env NFSHOME=$NFSHOME /tmp/setup.sh baseline-nomad ${FIRST?} ${COUNT?} ${CLUSTER_SIZE?}
@@ -98,19 +100,13 @@ function main() {
 
 
 function config() {
+  # Let's put LB/fabio on all servers
+  export LB_COUNT=${CLUSTER_SIZE?}
   export CONSUL_COUNT=${CLUSTER_SIZE?}
 
-  # We will put PV on 1st server
-  # We will put LB/fabio on all servers
-  export LB_COUNT=${CLUSTER_SIZE?}
-
-
-  SYSCTL1=systemctl
-  SYSCTL2=
   if [ "$FIRST" = "" ]; then
     export FIRST=$(hostname -f)
   fi
-
 
   export  NOMAD_ADDR="https://${FIRST?}:4646"
   export CONSUL_ADDR="http://localhost:8500"
@@ -118,9 +114,11 @@ function config() {
   export PV_MAX=20
   export PV_DIR=/pv
 
+  # get IP address of FIRST
   export FIRSTIP=$(host ${FIRST?} | perl -ane 'print $F[3] if $F[2] eq "address"' |head -1)
+
   # find daemon config files
-  NOMAD_HCL=$(dpkg -L nomad  2>/dev/null |egrep ^/etc/ |egrep -m1 '\.hcl$' || echo -n '')
+  NOMAD_HCL=$( dpkg -L nomad  2>/dev/null |egrep ^/etc/ |egrep -m1 '\.hcl$' || echo -n '')
   CONSUL_HCL=$(dpkg -L consul 2>/dev/null |egrep ^/etc/ |egrep -m1 '\.hcl$' || echo -n '')
 }
 
@@ -128,8 +126,6 @@ function config() {
 function baseline() {
   cd /tmp
 
-  # install binaries and service files
-  #   eg: /usr/bin/nomad  /etc/nomad.d/nomad.hcl  /usr/lib/systemd/system/nomad.service
   sudo apt-get -yqq install  wget
 
   # install docker if not already present
@@ -141,6 +137,8 @@ function baseline() {
   sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
   sudo apt-get -yqq update
 
+  # install binaries and service files
+  #   eg: /usr/bin/consul  /etc/consul.d/consul.hcl  /usr/lib/systemd/system/consul.service
   sudo apt-get -yqq install  consul
 
   config
@@ -158,21 +156,12 @@ function baseline() {
   sudo systemctl daemon-reload
   sudo systemctl enable  consul
 
-
   setup-consul
 
-
-  echo "================================================================================"
-  consul members
-  echo "================================================================================"
-
-
+  # avoid a decrypt bug (consul servers speak encrypted to each other over https)
   sudo rm /opt/consul/serf/local.keyring
-  sudo ${SYSCTL1?} ${SYSCTL2?} restart  consul
+  sudo systemctl restart  consul
   sleep 10
-
-  # and try again manually
-  # (All servers need the same contents)
 
   set +x
 
@@ -200,10 +189,10 @@ function baseline-nomad {
   #   "No installed keys could decrypt the message"
   # try either (depending on nomad or consul) inspecting all nodes' contents of file) and:
   # sudo rm /opt/nomad/data/server/serf.keyring
-  # sudo ${SYSCTL1?} ${SYSCTL2?} restart  nomad
+  # sudo systemctl restart  nomad
 
 
-  nomad-env-vars
+  nomad-addr-and-token
   echo "================================================================================"
   ( set -x; nomad server members )
   echo "================================================================================"
@@ -214,7 +203,7 @@ function baseline-nomad {
 
 function finish() {
   sleep 30
-  nomad-env-vars
+  nomad-addr-and-token
 
   nomad run ${RAW?}/etc/fabio.hcl
 
@@ -257,7 +246,6 @@ To uninstall:
   https://gitlab.com/internetarchive/nomad/-/blob/master/wipe-node.sh
 
 
-
 "
 }
 
@@ -281,119 +269,54 @@ encrypt = "'${TOK_C?}'"
 retry_join = ["'${FIRSTIP?}'"]
 ' | sudo tee -a  $CONSUL_HCL
 
-  sudo ${SYSCTL1?} ${SYSCTL2?} restart consul  &&  sleep 10
+  sudo systemctl restart consul  &&  sleep 10
 }
 
 
 function setup-nomad() {
-  ## Nomad - setup the fields 'encrypt' etc. as per your cluster.
+  # setup only 1st server to go into bootstrap mode (with itself)
   [ $COUNT -ge 1 ] && sudo sed -i -e 's^bootstrap_expect =.*$^^' $NOMAD_HCL
 
-  ( configure-nomad ) | sudo tee -a $NOMAD_HCL
+  # setup the fields 'encrypt' etc. as per your cluster.
+  [ $COUNT -eq 0 ]  &&  export TOK_N=$(nomad operator keygen |tr -d ^ |cat)
+  [ $COUNT -ge 1 ]  &&  export TOK_N=$(ssh ${FIRST?} "egrep  'encrypt\s*=' ${NOMAD_HCL?}"  |cut -f2- -d= |tr -d '\t "' |cat)
 
-  sudo ${SYSCTL1?} ${SYSCTL2?} restart nomad  &&  sleep 10  ||  echo 'moving on ...'
-}
-
-
-function configure-nomad() {
-  [ $COUNT -eq 0 ]  &&  TOK_N=$(nomad operator keygen |tr -d ^ |cat)
-  [ $COUNT -ge 1 ]  &&  TOK_N=$(ssh ${FIRST?} "egrep  'encrypt\s*=' ${NOMAD_HCL?}"  |cut -f2- -d= |tr -d '\t "' |cat)
-
-  set +x
-
-  echo '
-name = "'$(hostname -s)'"
-
-server {
-  encrypt = "'${TOK_N?}'"
-}
-
-# some of this could be redundant -- check defaults in node v1+
-addresses {
-  http = "0.0.0.0"
-}
-
-advertise {
-  http = "{{ GetInterfaceIP \"eth0\" }}"
-  rpc = "{{ GetInterfaceIP \"eth0\" }}"
-  serf = "{{ GetInterfaceIP \"eth0\" }}"
-}
-'
-
-
-  # ensure docker jobs can mount volumes
-  echo '
-plugin "docker" {
-  config {
-    volumes {
-      enabled = true
-    }
-  }
-}
-
-plugin "raw_exec" {
-  config {
-    enabled = true
-  }
-}
-
-# @see https://learn.hashicorp.com/nomad/transport-security/enable-tls
-acl {
-  enabled = true
-}
-tls {
-  http = true
-  cert_file = "/opt/nomad/tls/tls.crt"
-  key_file  = "/opt/nomad/tls/tls.key"
-}'
-
-
-  echo '
-client {
-'
-
-  # We'll put a loadbalancer on all cluster nodes
   # All jobs requiring a PV get put on first cluster node
-  local KIND='worker'
-  [ ${COUNT?} -lt ${LB_COUNT?} ]  &&  KIND="$KIND,lb"
-  [ ${COUNT?} -eq 0 ]             &&  KIND="$KIND,pv"
+  # We'll put a loadbalancer on all cluster nodes (unless installer wants otherwise)
+  export KIND=worker
+  [ ${COUNT?} -eq 0 ]             &&  export KIND="$KIND,pv"
+  [ ${COUNT?} -lt ${LB_COUNT?} ]  &&  export KIND="$KIND,lb"
 
-  echo '
-  meta {
-    "kind" = "'$KIND'"
-  }'
 
-  [ $NFSHOME ]  &&  echo '
+  export HOME_NFS=/tmp/home
+  [ $NFSHOME ]  &&  export HOME_NFS=/home
 
-  host_volume "home-ro" {
-    path      = "/home"
-    read_only = true
-  }
 
-  host_volume "home-rw" {
-    path      = "/home"
-    read_only = false
-  }'
+  getr etc/nomad.hcl
 
-  [ ${COUNT?} -eq 0 ]  &&  (
-    # pass through disk from host for now.  peg project(s) with PV requirements to this host.
-    for N in $(seq 1 ${PV_MAX?}); do
-      echo -n '
-    host_volume "pv'$N'" {
-      path      = "'$PV_DIR'/'$N'"
-      read_only = false
-    }'
-    done
-  )
 
-  echo '
-}'
+  # First server in cluster gets marked for hosting repos with Persistent Volume requirements.
+  # Keeping things simple, and to avoid complex multi-host solutions like rook/ceph, we'll
+  # pass through these `/pv/` dirs from the VM/host to containers.  Each container using it
+  # needs to use a unique subdir...
+  # So we'll peg all deployed project(s) with PV requirements to first host.
+  for N in $(seq 1 ${PV_MAX?}); do
+    sudo mkdir -m777 -p ${PV_DIR?}/$N
+    echo 'client { host_volume "pv'$N'" { path = "'${PV_DIR?}'/'$N'" read_only = false }}' \
+      >> /tmp/nomad.hcl
+  done
 
-  set -x
+  # interpolate  /tmp/nomad.hcl  to  $NOMAD_HCL
+  ( echo "cat <<EOF"; cat /tmp/nomad.hcl; echo EOF ) | sh |sudo tee $NOMAD_HCL
+  rm /tmp/nomad.hcl
+
+
+  sudo systemctl restart nomad  &&  sleep 10  ||  echo 'moving on ...'
 }
 
 
-function nomad-env-vars() {
+function nomad-addr-and-token() {
+  # set NOMAD_ADDR and NOMAD_TOKEN
   CONF=$HOME/.config/nomad
   if [ ${COUNT?} -eq 0 ]; then
     # NOTE: if you can't listen on :443 and :80 (the ideal defaults), you'll need to change
@@ -417,20 +340,12 @@ export NOMAD_TOKEN="$(fgrep 'Secret ID' $NOMACL |cut -f2- -d= |tr -d ' ') |tee $
 
 function setup-misc() {
   if [ -e /etc/ferm ]; then
+    # archive.org uses `ferm` for port firewalling.
+    # Open the minimum number of HTTP/TCP/UDP ports we need to run.
     getr ports-unblock.sh
     /tmp/ports-unblock.sh
     sudo service docker restart  ||  echo 'no docker yet'
   fi
-
-  [ ${COUNT?} -eq 0 ]  &&  (
-    # One server in cluster gets marked for hosting repos with Persistent Volume requirements.
-    # Keeping things simple, and to avoid complex multi-host solutions like rook/ceph, we'll
-    # pass through these `/pv/` dirs from the VM/host to containers.  Each container using it
-    # needs to use a unique subdir...
-    for N in $(seq 1 ${PV_MAX?}); do
-      sudo mkdir -m777 -p ${PV_DIR?}/$N
-    done
-  )
 
 
   # This gets us DNS resolving on archive.org VMs, at the VM level (not inside containers)-8
@@ -438,7 +353,7 @@ function setup-misc() {
   #   services-clusters.service.consul
   if [ -e /etc/dnsmasq.d/ ]; then
     echo "server=/consul/127.0.0.1#8600" |sudo tee /etc/dnsmasq.d/nomad
-    sudo ${SYSCTL1?} ${SYSCTL2?} restart dnsmasq
+    sudo systemctl restart dnsmasq
     sleep 2
   fi
 }
