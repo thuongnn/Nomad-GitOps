@@ -1,48 +1,54 @@
 #!/bin/zsh -e
 
 # One time setup of server(s) to make a nomad cluster.
-#
-# Assumes you are creating cluster with debian/ubuntu VMs/baremetals,
-# that you have ssh and sudo access to.
-#
-# Overview:
-#   Installs nomad server and client on all nodes, securely talking together & electing a leader
-#   Installs consul server and client on all nodes
-#   Installs load balancer "fabio" on all nodes
-#      (in case you want to use multiple IP addresses for deployments in case one LB/node is out)
-#   Optionally installs gitlab runner on 1st node
-#   Sets up Persistent Volume subdirs on 1st node - deployments needing PV only schedule to this node
-#
-# NOTE: if setup 3 nodes (h0, h1 & h2) on day 1; and want to add 2 more (h3 & h4) later,
-# you should manually change 2 lines in `setup-env-vars()` below -- look for INITIAL_CLUSTER_SIZE
 
 
 MYDIR=${0:a:h}
+MYSELF=$MYDIR/setup.sh
 
 # where supporting scripts live and will get pulled from
-RAW=https://gitlab.com/internetarchive/nomad/-/raw/master
+REPO=https://gitlab.com/internetarchive/nomad/-/raw/master
 
-[ $# -lt 1 ]  &&  echo "
-usage: $0  [TLS_CRT file]  [TLS_KEY file]  <node 1>  <node 2>  ..
 
-[TLS_CRT file] - file location. wildcard domain PEM format.
-[TLS_KEY file] - file location. wildcard domain PEM format.  May need to prepend '[SERVER]:' for rsync..)
+function usage() {
+  echo "
+----------------------------------------------------------------------------------------------------
+Usage: $MYSELF  [TLS_CRT file]  [TLS_KEY file]  <node 1>  <node 2>  ..
+
+----------------------------------------------------------------------------------------------------
+[TLS_CRT file] - wildcard domain cert file location, PEM format.  eg: .../archive.org-cert.pem
+[TLS_KEY file] - wildcard domain  key file location, PEM format.  eg: .../archive.org-key.pem
+    File locations can be local to each VM
+    or in \`rsync\` format where you prepend '[SERVER]:' in the filename
 
 Run this script on a mac/linux laptop or VM where you can ssh in to all of your nodes.
 
 If invoking cmd-line has env var NFSHOME=1 then we'll setup /home/ r/o and r/w mounts.
 
 To simplify, we'll reuse TLS certs, setting up ACL and TLS for nomad.
-"  &&  exit 1
 
+----------------------------------------------------------------------------------------------------
+Assumes you are creating cluster with debian/ubuntu VMs/baremetals,
+that you have ssh and sudo access to.
 
-# avoid any environment vars from CLI poisoning..
-unset   NOMAD_TOKEN
-unset   NOMAD_ADDR
+Overview:
+  Installs nomad server and client on all nodes, securely talking together & electing a leader
+  Installs consul server and client on all nodes
+  Installs load balancer 'fabio' on all nodes
+     (in case you want to use multiple IP addresses for deployments in case one LB/node is out)
+  Sets up Persistent Volume subdirs on 1st node - deployments needing PV only schedule to this node
+
+----------------------------------------------------------------------------------------------------
+NOTE: if setup 3 nodes (h0, h1 & h2) on day 1; and want to add 2 more (h3 & h4) later,
+you should manually change 2 lines in \`setup-env-vars()\` in script -- look for INITIAL_CLUSTER_SIZE
+
+"
+  exit 1
+}
 
 
 function main() {
-  if [ "$#" -gt 1 ]; then
+  if [ "$#" -gt 2 ]; then
     # This is where the script starts
     setup-env-vars "$@"
     set -x
@@ -52,8 +58,8 @@ function main() {
     # https://learn.hashicorp.com/tutorials/nomad/clustering#use-consul-to-automatically-cluster-nodes
     for NODE in ${NODES?}; do
       # copy ourself / this script & env file over to the node first, then run script
-      cat ${MYDIR?}/setup.sh | ssh $NODE 'tee /tmp/setup.sh  >/dev/null  &&  chmod +x /tmp/setup.sh'
-      cat /tmp/setup.env     | ssh $NODE 'tee /tmp/setup.env >/dev/null'
+      cat /tmp/setup.env | ssh $NODE 'tee /tmp/setup.env >/dev/null'
+      cat ${MYSELF}      | ssh $NODE 'tee /tmp/setup.sh  >/dev/null  &&  chmod +x /tmp/setup.sh'
       ssh $NODE  /tmp/setup.sh  setup-consul-and-certs
     done
 
@@ -70,12 +76,20 @@ function main() {
 
   elif [ "$1" = "setup-nomad" ]; then
     setup-nomad
+
+  else
+    usage "$@"
   fi
 }
 
 
 function setup-env-vars() {
   # sets up environment variables into a tmp file and then sources it
+
+  # avoid any potentially previously set external environment vars from CLI poisoning..
+  unset   NOMAD_TOKEN
+  unset   NOMAD_ADDR
+
 
   TLS_CRT=$1  # @see create-https-certs.sh - fully qualified path to crt file it created
   TLS_KEY=$2  # @see create-https-certs.sh - fully qualified path to key file it created
@@ -137,6 +151,10 @@ function setup-env-vars() {
 function load-env-vars() {
   # loads environment variables that `setup-env-vars` previously setup
   source /tmp/setup.env
+
+  # avoid any potentially previously set external environment vars from CLI poisoning..
+  unset   NOMAD_TOKEN
+  unset   NOMAD_ADDR
 
   # Now figure out what our COUNT number is for the host we are running on now.
   # Try short and FQDN hostnames since not sure what user ran on cmd-line.
@@ -304,7 +322,7 @@ function setup-nomad {
 
 
   # install fabio/loadbalancer across all nodes
-  nomad run ${RAW?}/etc/fabio.hcl
+  nomad run ${REPO?}/etc/fabio.hcl
 }
 
 
@@ -372,7 +390,7 @@ function setup-certs() {
 
   sudo mkdir -p         /etc/fabio/ssl/
   sudo chown root:root  /etc/fabio/ssl/
-  wget -qO- ${RAW?}/etc/fabio.properties |sudo tee /etc/fabio/fabio.properties
+  wget -qO- ${REPO?}/etc/fabio.properties |sudo tee /etc/fabio/fabio.properties
 
   sudo rsync -Pav ${TLS_CRT?} ${CRT?}
   sudo rsync -Pav ${TLS_KEY?} ${KEY?}
@@ -392,7 +410,7 @@ function setup-certs() {
 
 function getr() {
   # gets a supporting file from main repo into /tmp/
-  wget --backups=1 -qP /tmp/ ${RAW}/"$1"
+  wget --backups=1 -qP /tmp/ ${REPO}/"$1"
   chmod +x /tmp/$(basename "$1")
 }
 
