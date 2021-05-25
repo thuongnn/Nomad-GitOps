@@ -5,7 +5,7 @@
 # Assumes you are creating cluster with debian/ubuntu VMs/baremetals,
 # that you have ssh and sudo access to.
 #
-# Current Overview:
+# Overview:
 #   Installs nomad server and client on all nodes, securely talking together & electing a leader
 #   Installs consul server and client on all nodes
 #   Installs load balancer "fabio" on all nodes
@@ -43,6 +43,7 @@ unset   NOMAD_ADDR
 
 function main() {
   if [ "$#" -gt 1 ]; then
+    # This is where the script starts
     setup-env-vars "$@"
     set -x
 
@@ -74,6 +75,8 @@ function main() {
 
 
 function setup-env-vars() {
+  # sets up environment variables into a tmp file and then sources it
+
   TLS_CRT=$1  # @see create-https-certs.sh - fully qualified path to crt file it created
   TLS_KEY=$2  # @see create-https-certs.sh - fully qualified path to key file it created
   shift
@@ -132,12 +135,13 @@ function setup-env-vars() {
 
 
 function load-env-vars() {
+  # loads environment variables that `setup-env-vars` previously setup
   source /tmp/setup.env
 
   # Now figure out what our COUNT number is for the host we are running on now.
   # Try short and FQDN hostnames since not sure what user ran on cmd-line.
   for HO in  $(hostname -s)  $(hostname); do
-    export COUNT=$(env |fgrep 'export COUNT_'| fgrep "$HO" |cut -f1 -d= |cut -f2 -d_)
+    export COUNT=$(env |egrep '^COUNT_'| fgrep "$HO" |cut -f1 -d= |cut -f2 -d_)
     [ -z "$COUNT" ]  ||  break
   done
 
@@ -205,7 +209,7 @@ retry_join = ["'${FIRSTIP?}'"]
 
 
   # avoid a decrypt bug (consul servers speak encrypted to each other over https)
-  sudo rm /opt/consul/serf/local.keyring
+  sudo rm -fv /opt/consul/serf/local.keyring
   sudo systemctl restart  consul
   sleep 10 # xxx comment all sleeps
 
@@ -218,6 +222,7 @@ retry_join = ["'${FIRSTIP?}'"]
 
 
 function setup-nomad {
+  # sets up nomad
   load-env-vars
 
   sudo apt-get -yqq install  nomad
@@ -236,9 +241,6 @@ function setup-nomad {
   # now that this user and group exist, lock certs dir down
   sudo chown -R nomad.nomad /opt/nomad/tls
 
-
-  # setup only 1st server to go into bootstrap mode (with itself)
-  [ ${COUNT?} -ge 1 ] && sudo sed -i -e 's^bootstrap_expect =.*$^^' $NOMAD_HCL
 
   # setup the fields 'encrypt' etc. as per your cluster.
   [ ${COUNT?} -eq 0 ]  &&  export TOK_N=$(nomad operator keygen |tr -d ^ |cat)
@@ -260,6 +262,10 @@ function setup-nomad {
   # interpolate  /tmp/nomad.hcl  to  $NOMAD_HCL
   ( echo "cat <<EOF"; cat /tmp/nomad.hcl; echo EOF ) | sh | sudo tee $NOMAD_HCL
   rm /tmp/nomad.hcl
+
+
+  # setup only 1st server to go into bootstrap mode (with itself)
+  [ ${COUNT?} -ge 1 ] && sudo sed -i -e 's^bootstrap_expect =.*$^^' $NOMAD_HCL
 
 
   # First server in cluster gets marked for hosting repos with Persistent Volume requirements.
@@ -296,9 +302,9 @@ function setup-nomad {
 
 
 function nomad-addr-and-token() {
-  # set NOMAD_ADDR and NOMAD_TOKEN
+  # sets NOMAD_ADDR and NOMAD_TOKEN
   CONF=$HOME/.config/nomad
-  if [ "$COUNT" -eq 0 ]; then
+  if [ "$COUNT" = "0" ]; then
     [ -e $CONF ]  &&  mv $CONF $CONF.prev
     # xxx doc this
     local NOMACL=$HOME/.config/nomad.${FIRST?}
@@ -318,6 +324,7 @@ export NOMAD_TOKEN="$(fgrep 'Secret ID' $NOMACL |cut -f2- -d= |tr -d ' ') |tee $
 
 
 function setup-misc() {
+  # sets up docker (if needed) and a few other misc. things
   sudo apt-get -yqq install  wget
 
   # install docker if not already present
