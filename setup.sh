@@ -46,7 +46,9 @@ unset   NOMAD_ADDR
 
 
 function main() {
-  if [ "$1" != "baseline"  -a  "$1" != "baseline-nomad" ]; then
+  # xxx run all 3 the same way, including leader
+
+  if [ "$1" != "setup-consul-and-certs"  -a  "$1" != "setup-nomad" ]; then
     TLS_CRT=$1  # @see create-https-certs.sh - fully qualified path to crt file it created
     TLS_KEY=$2  # @see create-https-certs.sh - fully qualified path to key file it created
     shift
@@ -63,24 +65,24 @@ function main() {
     setup-certs
 
 
-    # Setup baseline & get consul up/ running *first* -- so can use consul for nomad bootstraping.
-    # Run "baseline" across all VMs.
+    # Setup certs & get consul up & running *first* -- so can use consul for nomad bootstraping.
+    # Run "setup-consul-and-certs" across all VMs.
     # https://learn.hashicorp.com/tutorials/nomad/clustering#use-consul-to-automatically-cluster-nodes
     typeset -a $NODES
     NODES=( ${FIRST?} "$@" )
     for NODE in ${NODES?}; do
       # copy ourself / this script over to the node first, then run it
       cat ${MYDIR?}/setup.sh | ssh $NODE 'tee /tmp/setup.sh >/dev/null && chmod +x /tmp/setup.sh'
-      ssh $NODE env NFSHOME=$NFSHOME /tmp/setup.sh baseline ${FIRST?} ${COUNT?} ${CLUSTER_SIZE?}
+      ssh $NODE env NFSHOME=$NFSHOME /tmp/setup.sh setup-consul-and-certs ${FIRST?} ${COUNT?} ${CLUSTER_SIZE?}
       let "COUNT=$COUNT+1"
     done
 
 
     # Now get nomad configured and up.
-    # Run "baseline-nomad" on all VMs.
+    # Run "setup-nomad" on all VMs.
     COUNT=${INITIAL_CLUSTER_SIZE?}
     for NODE in ${NODES?}; do
-      ssh $NODE env NFSHOME=$NFSHOME /tmp/setup.sh baseline-nomad ${FIRST?} ${COUNT?} ${CLUSTER_SIZE?}
+      ssh $NODE env NFSHOME=$NFSHOME /tmp/setup.sh setup-nomad ${FIRST?} ${COUNT?} ${CLUSTER_SIZE?}
       let "COUNT=$COUNT+1"
     done
 
@@ -94,7 +96,7 @@ function main() {
 
     config
 
-    "$1"
+    "$1" # xxx this is hard for people to understand
   fi
 }
 
@@ -116,14 +118,10 @@ function config() {
 
   # get IP address of FIRST
   export FIRSTIP=$(host ${FIRST?} | perl -ane 'print $F[3] if $F[2] eq "address"' |head -1)
-
-  # find daemon config files
-  NOMAD_HCL=$( dpkg -L nomad  2>/dev/null |egrep ^/etc/ |egrep -m1 '\.hcl$' || echo -n '')
-  CONSUL_HCL=$(dpkg -L consul 2>/dev/null |egrep ^/etc/ |egrep -m1 '\.hcl$' || echo -n '')
 }
 
 
-function baseline() {
+function setup-consul-and-certs() {
   cd /tmp
 
   sudo apt-get -yqq install  wget
@@ -143,13 +141,6 @@ function baseline() {
 
   config
 
-  # restore original config (if reran)
-  [ -e $CONSUL_HCL.orig ]  &&  sudo cp -p $CONSUL_HCL.orig $CONSUL_HCL
-
-  # stash copies of original config
-  sudo cp -p $CONSUL_HCL $CONSUL_HCL.orig
-
-
   # start up uncustomized version of consul
   setup-certs
   setup-misc
@@ -161,7 +152,7 @@ function baseline() {
   # avoid a decrypt bug (consul servers speak encrypted to each other over https)
   sudo rm /opt/consul/serf/local.keyring
   sudo systemctl restart  consul
-  sleep 10
+  sleep 10 # xxx comment all sleeps
 
   set +x
 
@@ -171,43 +162,25 @@ function baseline() {
 }
 
 
-function baseline-nomad {
-  sudo apt-get -yqq install  nomad
-
-  config
-
-  [ -e  $NOMAD_HCL.orig ]  &&  sudo cp -p  $NOMAD_HCL.orig  $NOMAD_HCL
-  sudo cp -p  $NOMAD_HCL  $NOMAD_HCL.orig
-
-  sudo systemctl daemon-reload
-  sudo systemctl enable  nomad
-
-  setup-certs
-
-  setup-nomad
-  # NOTE: if you see failures join-ing and messages like:
-  #   "No installed keys could decrypt the message"
-  # try either (depending on nomad or consul) inspecting all nodes' contents of file) and:
-  # sudo rm /opt/nomad/data/server/serf.keyring
-  # sudo systemctl restart  nomad
-  set +x
-
-  nomad-addr-and-token
-  echo "================================================================================"
-  ( set -x; nomad server members )
-  echo "================================================================================"
-  ( set -x; nomad node status )
-  echo "================================================================================"
-}
-
-
 function setup-consul() {
-  ## Consul - setup the fields 'encrypt' etc. as per your cluster.
+  # sets up consul
 
+  # find daemon config files from listing apt pkg contents ( eg: /etc/nomad.d/nomad.hcl )
+  CONSUL_HCL=$(dpkg -L consul 2>/dev/null |egrep ^/etc/ |egrep -m1 '\.hcl$' || echo -n '')
+
+  # restore original config (if reran)
+  [ -e $CONSUL_HCL.orig ]  &&  sudo cp -p $CONSUL_HCL.orig $CONSUL_HCL
+
+  # stash copies of original config
+  sudo cp -p $CONSUL_HCL $CONSUL_HCL.orig
+
+
+  # setup the fields 'encrypt' etc. as per your cluster.
   if [ ${COUNT?} -eq 0 ]; then
     # starting cluster - how exciting!  mint some tokens
     TOK_C=$(consul keygen |tr -d ^)
   else
+    # xxx docme
     TOK_C=$(ssh ${FIRST?} "egrep '^encrypt\s*=' ${CONSUL_HCL?}" |cut -f2- -d= |tr -d '\t "')
   fi
 
@@ -224,12 +197,28 @@ retry_join = ["'${FIRSTIP?}'"]
 }
 
 
-function setup-nomad() {
+function setup-nomad {
+  sudo apt-get -yqq install  nomad
+
+  # find daemon config files from listing apt pkg contents ( eg: /etc/nomad.d/nomad.hcl )
+  NOMAD_HCL=$( dpkg -L nomad  2>/dev/null |egrep ^/etc/ |egrep -m1 '\.hcl$' || echo -n '')
+
+  config
+
+  [ -e  $NOMAD_HCL.orig ]  &&  sudo cp -p  $NOMAD_HCL.orig  $NOMAD_HCL
+  sudo cp -p  $NOMAD_HCL  $NOMAD_HCL.orig
+
+  sudo systemctl daemon-reload
+  sudo systemctl enable  nomad
+
+  setup-certs
+
   # setup only 1st server to go into bootstrap mode (with itself)
   [ $COUNT -ge 1 ] && sudo sed -i -e 's^bootstrap_expect =.*$^^' $NOMAD_HCL
 
   # setup the fields 'encrypt' etc. as per your cluster.
   [ $COUNT -eq 0 ]  &&  export TOK_N=$(nomad operator keygen |tr -d ^ |cat)
+  # xxx doc this
   [ $COUNT -ge 1 ]  &&  export TOK_N=$(ssh ${FIRST?} "egrep  'encrypt\s*=' ${NOMAD_HCL?}"  |cut -f2- -d= |tr -d '\t "' |cat)
 
   # All jobs requiring a PV get put on first cluster node
@@ -265,6 +254,20 @@ function setup-nomad() {
 
 
   sudo systemctl restart nomad  &&  sleep 10  ||  echo 'moving on ...'
+
+  # NOTE: if you see failures join-ing and messages like:
+  #   "No installed keys could decrypt the message"
+  # try either (depending on nomad or consul) inspecting all nodes' contents of file) and:
+  # sudo rm /opt/nomad/data/server/serf.keyring
+  # sudo systemctl restart  nomad
+  set +x
+
+  nomad-addr-and-token
+  echo "================================================================================"
+  ( set -x; nomad server members )
+  echo "================================================================================"
+  ( set -x; nomad node status )
+  echo "================================================================================"
 }
 
 
@@ -276,11 +279,13 @@ function nomad-addr-and-token() {
     # the two fabio.* files in this dir, re-copy the fabio.properties file in place and manually
     # restart fabio..
     [ -e $CONF ]  &&  mv $CONF $CONF.prev
+    # xxx doc this
     local NOMACL=$HOME/.config/nomad.$(echo ${FIRST?} |cut -f1 -d.)
     mkdir -p $(dirname $NOMACL)
     chmod 600 $NOMACL $CONF 2>/dev/null |cat
     nomad acl bootstrap |tee $NOMACL
     # NOTE: can run `nomad acl token self` post-facto if needed...
+    # xxx doc cut, etc.
     echo "
 export NOMAD_ADDR=$NOMAD_ADDR
 export NOMAD_TOKEN="$(fgrep 'Secret ID' $NOMACL |cut -f2- -d= |tr -d ' ') |tee $CONF
@@ -322,11 +327,13 @@ function setup-certs() {
   sudo chown root:root  /etc/fabio/ssl/
   wget -qO- ${RAW?}/etc/fabio.properties |sudo tee /etc/fabio/fabio.properties
 
+  # xxx doc this
   [ $TLS_CRT ]  &&  sudo bash -c "(
     rsync -Pav ${TLS_CRT?} ${CRT?}
     rsync -Pav ${TLS_KEY?} ${KEY?}
   )"
 
+  # xxx doc this
   [ ${COUNT?} -gt 0 ]  &&  bash -c "(
     ssh ${FIRST?} sudo cat ${CRT?} |sudo tee ${CRT} >/dev/null
     ssh ${FIRST?} sudo cat ${KEY?} |sudo tee ${KEY} >/dev/null
