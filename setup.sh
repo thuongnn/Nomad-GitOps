@@ -51,7 +51,7 @@ function main() {
     # Run "setup-consul-and-certs" across all VMs.
     # https://learn.hashicorp.com/tutorials/nomad/clustering#use-consul-to-automatically-cluster-nodes
     for NODE in ${NODES?}; do
-      # copy ourself / this script & env file over to the node first, then run scritp
+      # copy ourself / this script & env file over to the node first, then run script
       cat ${MYDIR?}/setup.sh | ssh $NODE 'tee /tmp/setup.sh  >/dev/null  &&  chmod +x /tmp/setup.sh'
       cat /tmp/setup.env     | ssh $NODE 'tee /tmp/setup.env >/dev/null'
       ssh $NODE  /tmp/setup.sh  setup-consul-and-certs
@@ -298,6 +298,10 @@ function setup-nomad {
   echo "================================================================================"
   ( set -x; nomad node status )
   echo "================================================================================"
+
+
+  # install fabio/loadbalancer across all nodes
+  nomad run ${RAW?}/etc/fabio.hcl
 }
 
 
@@ -387,20 +391,7 @@ function getr() {
 
 function finish() {
   sleep 30
-  nomad-addr-and-token
-
-  nomad run ${RAW?}/etc/fabio.hcl
   set +x
-
-  echo "Setup GitLab runner in your cluster?\n"
-  echo "Enter 'yes' now to set up a GitLab runner in your cluster"
-  read cont
-
-  if [ "$cont" = "yes" ]; then
-    getr setup-runner.sh
-    /tmp/setup-runner.sh
-  fi
-
 
   echo "
 
