@@ -120,10 +120,9 @@ function setup-env-vars() {
     echo export INITIAL_CLUSTER_SIZE=$INITIAL_CLUSTER_SIZE
 
     # For each NODE to install on, set the COUNT or hostnumber from the order from the command line.
-    # To stick within env var limitations, use a checkum on the hostname for the variable name part.
     COUNT=${INITIAL_CLUSTER_SIZE?}
     for NODE in ${NODES?}; do
-      echo export COUNT_$(echo "$NODE" |md5sum |cut -f1 -d ' ')=$COUNT
+      echo export COUNT_$COUNT=$NODE
       let "COUNT=$COUNT+1"
     done
   ) |sort >| /tmp/setup.env
@@ -135,11 +134,10 @@ function setup-env-vars() {
 function load-env-vars() {
   source /tmp/setup.env
 
-  # Now figure out what our COUNT number is for this host.
+  # Now figure out what our COUNT number is for the host we are running on now.
   # Try short and FQDN hostnames since not sure what user ran on cmd-line.
   for HO in  $(hostname -s)  $(hostname); do
-    MD5=$(echo "$HO" |md5sum |cut -f1 -d ' ')
-    export COUNT=$(env | fgrep $MD5 |cut -f2 -d=)
+    export COUNT=$(env |fgrep 'export COUNT_'| fgrep "$HO" |cut -f1 -d= |cut -f2 -d_)
     [ -z "$COUNT" ]  ||  break
   done
 
@@ -240,12 +238,12 @@ function setup-nomad {
 
 
   # setup only 1st server to go into bootstrap mode (with itself)
-  [ $COUNT -ge 1 ] && sudo sed -i -e 's^bootstrap_expect =.*$^^' $NOMAD_HCL
+  [ ${COUNT?} -ge 1 ] && sudo sed -i -e 's^bootstrap_expect =.*$^^' $NOMAD_HCL
 
   # setup the fields 'encrypt' etc. as per your cluster.
-  [ $COUNT -eq 0 ]  &&  export TOK_N=$(nomad operator keygen |tr -d ^ |cat)
+  [ ${COUNT?} -eq 0 ]  &&  export TOK_N=$(nomad operator keygen |tr -d ^ |cat)
   # get the encrypt value from the first node's configured nomad /etc/ file
-  [ $COUNT -ge 1 ]  &&  export TOK_N=$(ssh ${FIRST?} "egrep  'encrypt\s*=' ${NOMAD_HCL?}"  |cut -f2- -d= |tr -d '\t "' |cat)
+  [ ${COUNT?} -ge 1 ]  &&  export TOK_N=$(ssh ${FIRST?} "egrep  'encrypt\s*=' ${NOMAD_HCL?}"  |cut -f2- -d= |tr -d '\t "' |cat)
 
   # All jobs requiring a PV get put on first cluster node
   # We'll put a loadbalancer on all cluster nodes (unless installer wants otherwise)
@@ -273,7 +271,7 @@ function setup-nomad {
     echo 'client {'
     for N in $(seq 1 ${PV_MAX?}); do
       sudo mkdir -m777 -p ${PV_DIR?}/$N
-      echo 'host_volume "pv'$N'" { path = "'${PV_DIR?}'/'$N'" read_only = false }'
+      echo '  host_volume "pv'$N'" { path = "'${PV_DIR?}'/'$N'" read_only = false }'
     done
     echo '}'
   ) |sudo tee -a $NOMAD_HCL
@@ -300,7 +298,7 @@ function setup-nomad {
 function nomad-addr-and-token() {
   # set NOMAD_ADDR and NOMAD_TOKEN
   CONF=$HOME/.config/nomad
-  if [ ${COUNT?} -eq 0 ]; then
+  if [ "$COUNT" -eq 0 ]; then
     [ -e $CONF ]  &&  mv $CONF $CONF.prev
     # xxx doc this
     local NOMACL=$HOME/.config/nomad.${FIRST?}
