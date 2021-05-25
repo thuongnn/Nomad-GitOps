@@ -205,13 +205,15 @@ encrypt = "'${TOK_C?}'"
 retry_join = ["'${FIRSTIP?}'"]
 ' | sudo tee -a  $CONSUL_HCL
 
+  # restart and give a few seconds to ensure server responds
   sudo systemctl restart consul  &&  sleep 10
 
 
   # avoid a decrypt bug (consul servers speak encrypted to each other over https)
   sudo rm -fv /opt/consul/serf/local.keyring
-  sudo systemctl restart  consul
-  sleep 10 # xxx comment all sleeps
+  # restart and give a few seconds to ensure server responds
+  sudo systemctl restart  consul  &&  sleep 10
+
 
   set +x
 
@@ -283,7 +285,8 @@ function setup-nomad {
   ) |sudo tee -a $NOMAD_HCL
 
 
-  sudo systemctl restart nomad  &&  sleep 10  ||  echo 'moving on ...'
+  # restart and give a few seconds to ensure server responds
+  sudo systemctl restart nomad  &&  sleep 10
 
   # NOTE: if you see failures join-ing and messages like:
   #   "No installed keys could decrypt the message"
@@ -309,14 +312,18 @@ function nomad-addr-and-token() {
   # sets NOMAD_ADDR and NOMAD_TOKEN
   CONF=$HOME/.config/nomad
   if [ "$COUNT" = "0" ]; then
+    # First VM -- bootstrap the entire nomad cluster
+    # If you already have a .config/nomad file -- copy it to a `.prev` file.
     [ -e $CONF ]  &&  mv $CONF $CONF.prev
-    # xxx doc this
+    # we only get one shot at bootstrapping the ACL info access to nomad -- so save entire response
+    # to a separate file (that we can extract needed TOKEN from)
     local NOMACL=$HOME/.config/nomad.${FIRST?}
     mkdir -p $(dirname $NOMACL)
     chmod 600 $NOMACL $CONF 2>/dev/null |cat
     nomad acl bootstrap |tee $NOMACL
     # NOTE: can run `nomad acl token self` post-facto if needed...
-    # xxx doc cut, etc.
+
+    # extract TOKEN from $NOMACL; set it to NOMAD_TOKEN; place the 2 nomad access env vars into $CONF
     echo "
 export NOMAD_ADDR=$NOMAD_ADDR
 export NOMAD_TOKEN="$(fgrep 'Secret ID' $NOMACL |cut -f2- -d= |tr -d ' ') |tee $CONF
@@ -350,6 +357,7 @@ function setup-misc() {
   #   services-clusters.service.consul
   if [ -e /etc/dnsmasq.d/ ]; then
     echo "server=/consul/127.0.0.1#8600" |sudo tee /etc/dnsmasq.d/nomad
+    # restart and give a few seconds to ensure server responds
     sudo systemctl restart dnsmasq
     sleep 2
   fi
@@ -390,7 +398,6 @@ function getr() {
 
 
 function finish() {
-  sleep 30
   set +x
 
   echo "
