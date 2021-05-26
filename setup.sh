@@ -149,12 +149,12 @@ function setup-env-vars() {
 
 
 function load-env-vars() {
-  # loads environment variables that `setup-env-vars` previously setup
-  source /tmp/setup.env
-
   # avoid any potentially previously set external environment vars from CLI poisoning..
   unset   NOMAD_TOKEN
   unset   NOMAD_ADDR
+
+  # loads environment variables that `setup-env-vars` previously setup
+  source /tmp/setup.env
 
   # Now figure out what our COUNT number is for the host we are running on now.
   # Try short and FQDN hostnames since not sure what user ran on cmd-line.
