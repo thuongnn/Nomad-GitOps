@@ -309,13 +309,16 @@ job "NOMAD_VAR_SLUG" {
         for_each = slice(keys(var.NOMAD_SECRETS), 0, min(1, length(keys(var.NOMAD_SECRETS))))
         labels = ["kv"]
         content {
-          driver = "raw_exec"
+          driver = "exec"
           config {
-            # this command cant quit, so wrap w/ bash and keep it running snoozed for a year
-            command = "/bin/bash"
+            command = "/usr/bin/consul"
             args = [
-              "-c", "consul kv put ${var.SLUG} \"${local.kv}\"; /bin/sleep 365d",
+              "kv", "put", var.SLUG, local.kv
             ]
+          }
+          lifecycle {
+            hook = "prestart"
+            sidecar = false
           }
         }
       }
