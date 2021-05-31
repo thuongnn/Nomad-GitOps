@@ -107,7 +107,8 @@ function nom-logs() {
   # simple way to view logs for a given job
   [ $# -eq 1 ]  &&  JOB=$1
   [ $# -ne 1 ]  &&  JOB=$(nom-job-from-cwd)
-  nomad alloc logs -f $(nom-job-to-alloc $JOB)
+  # NOTE: the 2nd $JOB is useful for when a job has 2+ tasks (eg: `kv` or DB/redis, etc.)
+  nomad alloc logs -f -job $JOB $JOB
 }
 
 
@@ -115,7 +116,7 @@ function nom-logs-err() {
   # simple way to view logs for a given job
   [ $# -eq 1 ]  &&  JOB=$1
   [ $# -ne 1 ]  &&  JOB=$(nom-job-from-cwd)
-  nomad alloc logs -stderr -f $(nom-job-to-alloc $JOB)
+  nomad alloc logs -stderr -f -job $JOB $JOB
 }
 
 
