@@ -7,6 +7,7 @@ MYDIR=${0:a:h}
 # where supporting scripts live and will get pulled from
 RAW=https://gitlab.com/internetarchive/nomad/-/raw/master
 
+
 function usage() {
   echo "
 usage: $0  [TLS_CRT file]  [TLS_KEY file]
@@ -316,7 +317,7 @@ function setup-certs() {
   sudo chown root:${GRP?} /etc/fabio/ssl/
   wget -qO- ${RAW?}/etc/fabio.properties |sudo tee /etc/fabio/fabio.properties
 
-  [ $TLS_CRT ]  &&  sudo bash -c "(
+  sudo bash -c "(
     rsync -Pav ${TLS_CRT?} ${CRT?}
     rsync -Pav ${TLS_KEY?} ${KEY?}
   )"
@@ -329,7 +330,7 @@ function setup-certs() {
   sudo mkdir -m 500 -p      /opt/nomad/tls
   sudo cp $CRT              /opt/nomad/tls/tls.crt
   sudo cp $KEY              /opt/nomad/tls/tls.key
-  sudo chown -R nomad.nomad /opt/nomad/tls  ||  echo 'future pass will work'
+  sudo chown -R nomad.nomad /opt/nomad/tls
   sudo chmod -R go-rwx      /opt/nomad/tls
 }
 
@@ -351,10 +352,6 @@ listen-address=127.0.0.1
 " |tee /usr/local/etc/dnsmasq.conf
 
   sudo brew services start dnsmasq
-
-  # verify host lookups are working now
-  #local IP=$(host udev-idev-everybodydev.x.archive.org |rev |cut -f1 -d ' ' |head -1)
-  # [ "$IP" = "$FIRSTIP" ]  ||  exit 1
 }
 
 
