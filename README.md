@@ -79,46 +79,12 @@ variables:
   - and enter your `$NOMAD_TOKEN` in the ACL requirement
 
 
-## helpful links
-- https://youtube.com/watch?v=3K1bSGN7zGA 'HashiConf Digital June 2020 - Full Opening Keynote'
-- https://www.nomadproject.io/docs/install/production/deployment-guide/
-- https://learn.hashicorp.com/nomad/managing-jobs/configuring-tasks
-- https://www.burgundywall.com/post/continuous-deployment-gitlab-and-nomad
-- https://weekly-geekly.github.io/articles/453322/index.html
-- https://www.haproxy.com/blog/haproxy-and-consul-with-dns-for-service-discovery/
-- https://www.youtube.com/watch?v=gf43TcWjBrE  Kelsey Hightower, HashiConf 2016
-- https://fabiolb.net/quickstart/
-
-### helpful for https / certs
-- https://github.com/fabiolb/fabio/wiki/Certificate-Stores#examples
-- https://developer.epages.com/blog/tech-stories/managing-lets-encrypt-certificates-in-vault/
-- https://github.com/acmesh-official/acme.sh#11-issue-wildcard-certificates
-
-### pick your container stack / testimonials
-- https://www.hashicorp.com/blog/hashicorp-joins-the-cncf/
-- https://www.nomadproject.io/intro/who-uses-nomad/
-  - + http://jet.com/walmart
-- https://medium.com/velotio-perspectives/how-much-do-you-really-know-about-simplified-cloud-deployments-b74d33637e07
-- https://blog.cloudflare.com/how-we-use-hashicorp-nomad/
-- https://www.hashicorp.com/resources/ncbi-legacy-migration-hybrid-cloud-consul-nomad/
-- https://thenewstack.io/fargate-grows-faster-than-kubernetes-among-aws-customers/
-- https://github.com/rishidot/Decision-Makers-Guide/blob/master/Decision%20Makers%20Guide%20-%20Nomad%20Vs%20Kubernetes%20-%20Oct%202019.pdf
-- https://medium.com/@trevor00/building-container-platforms-part-one-introduction-4ee2338eb11
-
-### future considerations?
-- https://github.com/hashicorp/consul-esm  (external service monitoring for Consul)
-- https://github.com/timperrett/hashpi (🍓raspberry PI mini cluster 😊)
-
-## issues / next steps
-- have [deploy] wait for service to be up and marked healthy??
-- ACME / `certmanager` for let's encrypt / https, etc.
-  - basic https works now if the certs are managed independently (and passed into fabio)
-
-
 ## Setup a Nomad Cluster
 - [setup.sh](setup.sh)
-- you can customize the install with these environment variables:
-  - `NFSHOME=1` - setup some minor config to support a r/w `/home/` and r/o `/home/`
+  - you can customize the install with these environment variables:
+    - `NFSHOME=1` - setup some minor config to support a r/w `/home/` and r/o `/home/`
+- [setup-mac.sh](setup-mac.sh)
+  - setup single-node cluster on your mac laptop
 
 Options:
 - have DNS domain you can point to a VM?
@@ -133,12 +99,16 @@ Options:
   - [[1/3] setup GitLab & GitLab Runner on your Mac](https://archive.org/~tracey/slides/devops/2021-02-17)
   - [[2/3] setup Nomad & Consul on your Mac](https://archive.org/~tracey/slides/devops/2021-02-24)
   - [[3/3] connect: GitLab, GitLab Runner, Nomad & Consul](https://archive.org/~tracey/slides/devops/2021-03-10)
-  
-  
-  ## monitoring GUI urls (via ssh tunnelling above)
+
+
+## monitoring GUI urls (via ssh tunnelling above)
+![Cluster Overview](https://archive.org/~tracey/slides/images/nomad-ui4.jpg)
+- nomad really nice overview (see `Topology` link)
+  - https://nomad-host:4646
+  - then enter your `NOMAD_TOKEN`
 - @see [aliases](aliases)  `nom-tunnel`
-- http://localhost:8500  # consul
-- http://localhost:9998  # fabio
+  - http://localhost:8500  # consul
+  - http://localhost:9998  # fabio
 
 
 ## inspect, poke around
@@ -195,6 +165,43 @@ Requirements:
 sleep 10  &&  \
 echo DATABASE_URL=postgres://postgres:${POSTGRESQL_PASSWORD}@$(cat /alloc/data/*-db.ip):5432/production >| .env && \
 ```
+
+
+## helpful links
+- https://youtube.com/watch?v=3K1bSGN7zGA 'HashiConf Digital June 2020 - Full Opening Keynote'
+- https://www.nomadproject.io/docs/install/production/deployment-guide/
+- https://learn.hashicorp.com/nomad/managing-jobs/configuring-tasks
+- https://www.burgundywall.com/post/continuous-deployment-gitlab-and-nomad
+- https://weekly-geekly.github.io/articles/453322/index.html
+- https://www.haproxy.com/blog/haproxy-and-consul-with-dns-for-service-discovery/
+- https://www.youtube.com/watch?v=gf43TcWjBrE  Kelsey Hightower, HashiConf 2016
+- https://fabiolb.net/quickstart/
+
+### helpful for https / certs
+- https://github.com/fabiolb/fabio/wiki/Certificate-Stores#examples
+- https://developer.epages.com/blog/tech-stories/managing-lets-encrypt-certificates-in-vault/
+- https://github.com/acmesh-official/acme.sh#11-issue-wildcard-certificates
+
+### pick your container stack / testimonials
+- https://www.hashicorp.com/blog/hashicorp-joins-the-cncf/
+- https://www.nomadproject.io/intro/who-uses-nomad/
+  - + http://jet.com/walmart
+- https://medium.com/velotio-perspectives/how-much-do-you-really-know-about-simplified-cloud-deployments-b74d33637e07
+- https://blog.cloudflare.com/how-we-use-hashicorp-nomad/
+- https://www.hashicorp.com/resources/ncbi-legacy-migration-hybrid-cloud-consul-nomad/
+- https://thenewstack.io/fargate-grows-faster-than-kubernetes-among-aws-customers/
+- https://github.com/rishidot/Decision-Makers-Guide/blob/master/Decision%20Makers%20Guide%20-%20Nomad%20Vs%20Kubernetes%20-%20Oct%202019.pdf
+- https://medium.com/@trevor00/building-container-platforms-part-one-introduction-4ee2338eb11
+
+### future considerations?
+- https://github.com/hashicorp/consul-esm  (external service monitoring for Consul)
+- https://github.com/timperrett/hashpi (🍓raspberry PI mini cluster 😊)
+
+## issues / next steps
+- have [deploy] wait for service to be up and marked healthy??
+- ACME / `certmanager` for let's encrypt / https, etc.
+  - basic https works now if the certs are managed independently (and passed into fabio)
+
 
 
 ## gitlab runner issues
