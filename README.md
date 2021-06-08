@@ -103,9 +103,9 @@ Options:
 
 ## monitoring GUI urls (via ssh tunnelling above)
 ![Cluster Overview](https://archive.org/~tracey/slides/images/nomad-ui4.jpg)
-- nomad really nice overview (see `Topology` link)
-  - https://nomad-host:4646
-  - then enter your `NOMAD_TOKEN`
+- nomad really nice overview (see `Topology` link ☝)
+  - https://[NOMAD-HOST]:4646 (eg: `$NOMAD_ADDR`)
+  - then enter your `$NOMAD_TOKEN`
 - @see [aliases](aliases)  `nom-tunnel`
   - http://localhost:8500  # consul
   - http://localhost:9998  # fabio
