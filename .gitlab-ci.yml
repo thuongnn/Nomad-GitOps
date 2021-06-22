@@ -38,6 +38,11 @@ include:
     # review app, then use them and log during [deploy] phase the first hostname in the list
     - export HOSTNAME="${NOMAD_VAR_SLUG}.${KUBE_INGRESS_BASE_DOMAIN}"
     - |
+      
+      echo NVPB=$NOMAD_VAR_PRODUCTION_BRANCH
+      echo NVH=$NOMAD_VAR_HOSTNAMES
+      echo NVC=$NOMAD_VAR_COUNT
+
       if [ "$NOMAD_VAR_PRODUCTION_BRANCH" = "" ]; then
         if [ "$NOMAD_VAR_HOSTNAMES" != ""  -a  "$CI_COMMIT_REF_SLUG" = "main" ]; then
           export HOSTNAME=$(echo "$NOMAD_VAR_HOSTNAMES" |cut -f1 -d, |tr -d '[]" ' |tr -d "'")
