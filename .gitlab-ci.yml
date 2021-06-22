@@ -47,7 +47,9 @@ include:
           export NOMAD_VAR_HOSTNAMES='["'$HOSTNAME'"]'
         fi 
       else
+        echo PROD OVERRIDE CHECK
         if [ "$NOMAD_VAR_HOSTNAMES" != ""  -a  "$CI_COMMIT_REF_SLUG" = "$NOMAD_VAR_PRODUCTION_BRANCH" ]; then
+          echo PROD OVERRIDE
           export HOSTNAME=$(echo "$NOMAD_VAR_HOSTNAMES" |cut -f1 -d, |tr -d '[]" ' |tr -d "'")
         fi
       fi
