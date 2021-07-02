@@ -92,11 +92,11 @@ function nom-cp() {
   done
   echo
 
-  local MAIN=
-  [ "$BRANCH" = "main"   ]  &&  MAIN=true
-  [ "$BRANCH" = "master" ]  &&  MAIN=true
-
   if [ $VSCODE ]; then
+    local MAIN=
+    [ "$BRANCH" = "main"   ]  &&  MAIN=true
+    [ "$BRANCH" = "master" ]  &&  MAIN=true
+
     local RSYNC=
     [   $MAIN ]  &&  RSYNC=true
     [ ! $MAIN ]  &&  [ "$RSYNC_BRANCHES" ]  &&  RSYNC=true
