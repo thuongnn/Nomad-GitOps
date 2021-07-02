@@ -152,6 +152,31 @@ In your project/repo Settings, set CI/CD environment variables starting with `NO
 and they will show up in your running container as environment variables, named with the lead `NOMAD_SECRET_` removed.  Thus, you can get `DATABASE_URL` (etc.) set in your running container - but not have it anywhere else in your docker image and not printed/shown during CI/CD pipeline phase logging.
 
 
+### Persistent Volumes
+Persistent Volumes (PV) are like mounted disks that get setup before your container starts and _mount_ in as a filesystem into your running container.  They are the only things that survive a running deployment update (eg: a new CI/CD pipeline), container restart, or system move to another cluster VM - hence _Persistent_.
+
+You can use PV to store files and data - especially nice for databases or otherwise (eg: retain `/var/lib/postgresql` through restarts, etc.)
+
+Your nomad cluster administrator has setup a series of "slots" - ask them for the next available slot for your project/repo (each project needs its own slot).
+
+Let's say the `pv8` slot is the next free slot in the system.  Here is how you'd update your project's
+`.gitlab-ci.yml` file, by adding these lines (suggest near top of your file):
+```yaml
+variables:
+  NOMAD_VAR_PV: '{ pv8 = "/pv" }'
+```
+Then the dir `/pv/` will show up (blank to start with) in your running container.
+
+If you'd like to have the mounted dir show up somewhere besides `/pv` in your container,
+you can setup like:
+```yaml
+variables:
+  NOMAD_VAR_PV: '{ pv8 = "/var/lib/postgresql" }'
+```
+
+Please verify added/updated files persist through two repo CI/CD pipelines before adding important data and files.  Your DevOps teams will try to ensure the VM that holds the data is backed up - but that does not happen by default without some extra setup.  The host VM that holds the data is the first node in the cluster from the initial cluster setup (and it all lives at `/pv/`, in numbered subdirs).
+
+
 ### Postgres DB
 Requirements:
 - set masked environment variables in your project's CI/CD Settings (see `Secrets` section above):
