@@ -7,10 +7,4 @@ mydir=${0:a:h}
 
 source $mydir/aliases
 
-# fish out file name from what VSCode 'sync-rsync' package sends us -- should be 2nd to last arg
-# switch dirs to make aliases work
-FILE=$(echo "$@" |rev |tr -s ' ' |cut -f2 -d' ' |rev)
-DIR=$(dirname "$FILE")
-cd "$DIR"
-
-nom-cp "$@"  ||  rsync "$@"
+nom-cp "$@"

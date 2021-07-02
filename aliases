@@ -92,12 +92,27 @@ function nom-cp() {
   done
   echo
 
+  local MAIN=
+  [ "$BRANCH" = "main"   ]  &&  MAIN=true
+  [ "$BRANCH" = "master" ]  &&  MAIN=true
 
-  [ "$BRANCH" = "main"   ]  &&  [ $VSCODE ]  &&  ( set -x; rsync "$@" )  &&  exit 0
-  [ "$BRANCH" = "master" ]  &&  [ $VSCODE ]  &&  ( set -x; rsync "$@" )  &&  exit 0
+  if [ $VSCODE ]; then
+    local RSYNC=
+    [   $MAIN ]  &&  RSYNC=true
+    [ ! $MAIN ]  &&  [ "$RSYNC_BRANCHES" ]  &&  RSYNC=true
 
-  [ "$JOB" = ""  -o  "$ALLOC" = "" ]  &&  echo 'has this branch run a full pipeline and deployed a Review App yet?'
-  [ "$JOB" = ""  -o  "$ALLOC" = "" ]  &&  exit 0 # no relevant job & alloc found - nothing to do
+    [ $RSYNC ]  &&  ( set -x; rsync "$@" )
+
+    # this is a special exception project where we DONT want to ALSO copy file to nomad deploy
+    [ $MAIN ]  &&  [ "$JOB" = "ia-petabox" ]  &&  exit 0
+  fi
+
+
+  if [ "$JOB" = ""  -o  "$ALLOC" = "" ]; then
+    # no relevant job & alloc found - nothing to do
+    echo 'has this branch run a full pipeline and deployed a Review App yet?'
+    exit 0
+  fi
 
   cat "$FILE" | ( set -x; nomad alloc exec -i -task $TASK "$ALLOC" sh -c "cat >| '$REST'" )
 }
