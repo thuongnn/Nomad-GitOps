@@ -24,6 +24,8 @@ job "fabio" {
           # setup HSTS headers - ensuring all services only communicate with https
           "-proxy.header.sts.maxage", "15724800",
           "-proxy.header.sts.subdomains",
+          # get client IP sent to containers
+          "-proxy.header.clientip", "X-Forwarded-For",
         ]
       }
       artifact {
