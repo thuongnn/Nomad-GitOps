@@ -6,7 +6,7 @@
 
 locals {
   # contruct long string robotically
-  ports = [443, 8012, 4245, 6881, 6969, 99]
+  ports = [443, 8012, 4245, 6881, 6969, 99, 8989, 8990, 7777, 8889]
   addrs = join(",", [for po in local.ports : "127.0.0.1:${po};cs=my-certs;type=path;cert=/etc/fabio/ssl"])
 }
 

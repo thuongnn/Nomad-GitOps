@@ -44,6 +44,9 @@ proto tcp dport 99 ACCEPT;
 proto tcp dport 8989 ACCEPT;
 proto tcp dport 8990 ACCEPT;
 
+#   services/scribe-c2:  7777 = "irc", 8889 = "reg"
+proto tcp dport 7777 ACCEPT;
+proto tcp dport 8889 ACCEPT;
 
 # ===== CLUSTER OPEN ======================================================================
 # for nomad join
