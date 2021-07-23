@@ -136,6 +136,9 @@ job "NOMAD_VAR_SLUG" {
       update {
         # https://learn.hashicorp.com/tutorials/nomad/job-rolling-update
         max_parallel  = 1
+        # https://learn.hashicorp.com/tutorials/nomad/job-blue-green-and-canary-deployments
+        canary = var.COUNT
+        auto_promote  = true
         min_healthy_time  = "30s"
         healthy_deadline  = "5m"
         progress_deadline = "10m"
