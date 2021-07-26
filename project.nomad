@@ -425,6 +425,11 @@ EOH
   } # end dynamic "group"
 
 
+  spread {
+    # Spread allocations equally over all nodes
+    attribute = "${node.unique.id}"
+  }
+
   migrate {
     max_parallel = 3
     health_check = "checks"
