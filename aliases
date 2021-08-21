@@ -175,20 +175,17 @@ function _nom-url() {
 }
 
 
-function nom-restart() {
-  # restarts a job (NOTE: needs to already be up/responsive and ssh-able)
-
-  echo "
-disabled due to issues - please use the GUI and find your job, then allocation, and [stop] it there (will auto-respawn somewhere else)
-
-  ${NOMAD_ADDR?}
-
-"
-  return
-
+function nom-resubmit() {
+  # Retrieves current job spec from nomad cluster and resubmits it to nomad.
+  # Useful for when a job has exceedded a setup timeout, is (nonideally) marked 'dead', etc.
   [ $# -eq 1 ]  &&  JOB=$1
   [ $# -ne 1 ]  &&  JOB=$(nom-job-from-cwd)
-  nomad alloc stop $(nom-job-to-alloc $JOB)
+
+  nomad inspect ${JOB?} |tee .$JOB
+  curl -XPOST -H "Content-Type: application/json" -H "X-Nomad-Token: $NOMAD_TOKEN" -d @.${JOB?} \
+    $NOMAD_ADDR/v1/jobs
+
+  rm -f .$JOB
 }
 
 
