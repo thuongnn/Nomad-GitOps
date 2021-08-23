@@ -184,6 +184,10 @@ job "NOMAD_VAR_SLUG" {
           "urlprefix-${HOST}:443/"], [for HOST in var.HOSTNAMES :
           "urlprefix-${HOST}:80/ redirect=308,https://${HOST}/"])
 
+        canary_tags = concat([for HOST in var.HOSTNAMES :
+          "urlprefix-canary-${HOST}:443/"], [for HOST in var.HOSTNAMES :
+          "urlprefix-canary-${HOST}:80/ redirect=308,https://canary-${HOST}/"])
+
         port = "http"
         check {
           name     = "alive"
@@ -209,6 +213,7 @@ job "NOMAD_VAR_SLUG" {
           # service.value == portname
           name = "${var.SLUG}-${service.value}"
           tags = ["urlprefix-${var.HOSTNAMES[0]}:${service.key}/"]
+          canary_tags = ["urlprefix-canary-${var.HOSTNAMES[0]}:${service.key}/"]
           port = "${service.value}"
           check {
             name     = "alive"
