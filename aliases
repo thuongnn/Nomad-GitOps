@@ -182,6 +182,11 @@ function nom-resubmit() {
   [ $# -ne 1 ]  &&  JOB=$(nom-job-from-cwd)
 
   nomad inspect ${JOB?} |tee .$JOB
+
+  # in case we are trying to _move_ an active/OK deploy
+  nomad stop ${JOB?}
+  sleep 5
+
   curl -XPOST -H "Content-Type: application/json" -H "X-Nomad-Token: $NOMAD_TOKEN" -d @.${JOB?} \
     $NOMAD_ADDR/v1/jobs
 
