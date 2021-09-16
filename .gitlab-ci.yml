@@ -81,6 +81,8 @@ deploy:
 
     - rm /tmp/env.json /tmp/env.env /tmp/plan.log
 
+    - fgrep -C5 constraint project.hcl
+
     - echo deployed to https://$HOSTNAME
 
   environment:
