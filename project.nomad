@@ -235,6 +235,7 @@ job "NOMAD_VAR_SLUG" {
 
           config {
             image = "${var.CI_REGISTRY_IMAGE}/${var.CI_COMMIT_REF_SLUG}:${var.CI_COMMIT_SHA}"
+            image_pull_timeout = "20m"
 
             auth {
               # GitLab docker login user/pass are pretty unstable.  If admin has set `..R2..` keys in
