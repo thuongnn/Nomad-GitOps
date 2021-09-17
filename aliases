@@ -8,12 +8,18 @@
 # If not running interactively, don't setup autocomplete
 if [ ! -z "$PS1" ]; then
   # nomad/consul autocompletes
-  which  nomad >/dev/null && [ "$SHELL"  = "/bin/zsh" ] && autoload -U +X bashcompinit && bashcompinit
-  which  nomad >/dev/null && [ "$SHELL"  = "/bin/zsh" ] && complete -o nospace -C $(which  nomad)  nomad
-  which consul >/dev/null && [ "$SHELL"  = "/bin/zsh" ] && complete -o nospace -C $(which consul) consul
+  if [ "$ZSH_VERSION" = "" ]; then
+    which  nomad >/dev/null  &&  complete            -C $(which  nomad)  nomad
+    which consul >/dev/null  &&  complete            -C $(which consul) consul
+  else
+    # https://apple.stackexchange.com/questions/296477/
+    ( which compdef 2>&1 |fgrep -q ' not found' )  &&  \
+      echo nomad repo setting up compinit  &&  autoload -Uz compinit  &&  compinit
 
-  which  nomad >/dev/null && [ "$SHELL" != "/bin/zsh" ] && complete            -C $(which  nomad)  nomad
-  which consul >/dev/null && [ "$SHELL" != "/bin/zsh" ] && complete            -C $(which consul) consul
+    which  nomad >/dev/null  &&  autoload -U +X bashcompinit && bashcompinit
+    which  nomad >/dev/null  &&  complete -o nospace -C $(which  nomad)  nomad
+    which consul >/dev/null  &&  complete -o nospace -C $(which consul) consul
+  fi
 fi
 
 
