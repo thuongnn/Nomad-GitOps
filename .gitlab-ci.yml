@@ -65,8 +65,6 @@ include:
           USE_FIRST_CUSTOM_HOSTNAME=1
         elif [ $PROD_IA ]; then
           export HOSTNAME="${CI_PROJECT_NAME}.prod.archive.org"
-        else
-          export NOMAD_VAR_HOSTNAMES='["'$HOSTNAME'"]'
         fi
       else
         if [ "$NOMAD_VAR_HOSTNAMES" != ""  -a  "$CI_COMMIT_REF_SLUG" = "$NOMAD_VAR_PRODUCTION_BRANCH" ]; then
@@ -75,7 +73,11 @@ include:
       fi
 
       if [ $USE_FIRST_CUSTOM_HOSTNAME ]; then
-          export HOSTNAME=$(echo "$NOMAD_VAR_HOSTNAMES" |cut -f1 -d, |tr -d '[]" ' |tr -d "'")
+        export HOSTNAME=$(echo "$NOMAD_VAR_HOSTNAMES" |cut -f1 -d, |tr -d '[]" ' |tr -d "'")
+      fi
+
+      if [ "$NOMAD_VAR_HOSTNAMES" = "" ]; then
+        export NOMAD_VAR_HOSTNAMES='["'$HOSTNAME'"]'
       fi
 
 
