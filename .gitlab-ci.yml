@@ -64,6 +64,7 @@ include:
         if [ "$NOMAD_VAR_HOSTNAMES" != ""  -a  $PROD_OR_MAIN ]; then
           USE_FIRST_CUSTOM_HOSTNAME=1
         elif [ $PROD_IA ]; then
+          echo xxx ${CI_PROJECT_NAME}
           export HOSTNAME="${CI_PROJECT_NAME}.prod.archive.org"
         else
           export NOMAD_VAR_HOSTNAMES='["'$HOSTNAME'"]'
