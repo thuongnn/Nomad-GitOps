@@ -41,6 +41,7 @@ test:
 There are various options that can be used in conjunction with the `project.nomad` and `.gitlab-ci.yml` files, keys:
 ```text
 NOMAD_VAR_BIND_MOUNTS
+NOMAD_VAR_CHECK_PATH
 NOMAD_VAR_CHECK_PROTOCOL
 NOMAD_VAR_COUNT
 NOMAD_VAR_CPU

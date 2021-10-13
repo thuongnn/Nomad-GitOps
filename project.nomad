@@ -32,6 +32,7 @@ variables {
 
   # A repo can set this to "tcp" - can help for debugging 1st deploy
   CHECK_PROTOCOL = "http"
+  CHECK_PATH = "/"
   HEALTH_TIMEOUT = "20s"
 
   # How many running containers should you deploy?
@@ -192,8 +193,8 @@ job "NOMAD_VAR_SLUG" {
         check {
           name     = "alive"
           type     = "${var.CHECK_PROTOCOL}"
+          path     = "${var.CHECK_PATH}"
           port     = "http"
-          path     = "/"
           interval = "10s"
           timeout  = "2s"
           check_restart {
@@ -218,8 +219,8 @@ job "NOMAD_VAR_SLUG" {
           check {
             name     = "alive"
             type     = "${var.CHECK_PROTOCOL}"
+            path     = "${var.CHECK_PATH}"
             port     = "http"
-            path     = "/"
             interval = "10s"
             timeout  = "2s"
           }
