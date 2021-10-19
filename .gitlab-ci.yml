@@ -74,6 +74,8 @@ include:
 
       if [ $USE_FIRST_CUSTOM_HOSTNAME ]; then
         export HOSTNAME=$(echo "$NOMAD_VAR_HOSTNAMES" |cut -f1 -d, |tr -d '[]" ' |tr -d "'")
+      else
+        NOMAD_VAR_HOSTNAMES=
       fi
 
       if [ "$NOMAD_VAR_HOSTNAMES" = "" ]; then
